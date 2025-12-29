@@ -1,97 +1,144 @@
-This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
+# Meso IQ - React Native App
 
-# Getting Started
+Native mobile version of Simple Workout Tracker, built with React Native CLI.
 
-> **Note**: Make sure you have completed the [Set Up Your Environment](https://reactnative.dev/docs/set-up-your-environment) guide before proceeding.
+## Project Structure
 
-## Step 1: Start Metro
-
-First, you will need to run **Metro**, the JavaScript build tool for React Native.
-
-To start the Metro dev server, run the following command from the root of your React Native project:
-
-```sh
-# Using npm
-npm start
-
-# OR using Yarn
-yarn start
+```
+src/
+├── api/              # API client and endpoints
+├── config/           # Environment configuration
+├── context/          # React contexts (Auth)
+├── hooks/            # Custom React hooks
+├── navigation/       # React Navigation setup
+├── screens/          # Screen components
+│   ├── auth/         # Authentication screens
+│   └── main/         # Main app screens
+├── services/         # Business logic services
+├── types/            # TypeScript type definitions
+└── utils/            # Utility functions
 ```
 
-## Step 2: Build and run your app
+## Setup
 
-With Metro running, open a new terminal window/pane from the root of your React Native project, and use one of the following commands to build and run your Android or iOS app:
+### Prerequisites
 
-### Android
+- Node.js >= 20
+- React Native development environment set up
+- Xcode (for iOS)
+- Android Studio (for Android)
 
-```sh
-# Using npm
-npm run android
+### Installation
 
-# OR using Yarn
-yarn android
+1. Install dependencies:
+```bash
+npm install
 ```
 
-### iOS
-
-For iOS, remember to install CocoaPods dependencies (this only needs to be run on first clone or after updating native deps).
-
-The first time you create a new project, run the Ruby bundler to install CocoaPods itself:
-
-```sh
-bundle install
+2. For iOS, install CocoaPods dependencies:
+```bash
+cd ios && pod install && cd ..
 ```
 
-Then, and every time you update your native dependencies, run:
+### Running the App
 
-```sh
-bundle exec pod install
-```
-
-For more information, please visit [CocoaPods Getting Started guide](https://guides.cocoapods.org/using/getting-started.html).
-
-```sh
-# Using npm
+**iOS:**
+```bash
 npm run ios
-
-# OR using Yarn
-yarn ios
 ```
 
-If everything is set up correctly, you should see your new app running in the Android Emulator, iOS Simulator, or your connected device.
+**Android:**
+```bash
+npm run android
+```
 
-This is one way to run your app — you can also build it directly from Android Studio or Xcode.
+**Start Metro bundler:**
+```bash
+npm start
+```
 
-## Step 3: Modify your app
+## Configuration
 
-Now that you have successfully run the app, let's make changes!
+### API URL
 
-Open `App.tsx` in your text editor of choice and make some changes. When you save, your app will automatically update and reflect these changes — this is powered by [Fast Refresh](https://reactnative.dev/docs/fast-refresh).
+The API URL is configured in `src/config/env.ts`. By default, it's set to `http://localhost:3000`.
 
-When you want to forcefully reload, for example to reset the state of your app, you can perform a full reload:
+**Important notes:**
+- For iOS simulator: `http://localhost:3000` works
+- For Android emulator: Use `http://10.0.2.2:3000` (or your computer's IP)
+- For physical devices: Use your computer's IP address (e.g., `http://192.168.1.100:3000`)
 
-- **Android**: Press the <kbd>R</kbd> key twice or select **"Reload"** from the **Dev Menu**, accessed via <kbd>Ctrl</kbd> + <kbd>M</kbd> (Windows/Linux) or <kbd>Cmd ⌘</kbd> + <kbd>M</kbd> (macOS).
-- **iOS**: Press <kbd>R</kbd> in iOS Simulator.
+Update the `API_URL` constant in `src/config/env.ts` as needed.
 
-## Congratulations! :tada:
+## Authentication
 
-You've successfully run and modified your React Native App. :partying_face:
+The app uses token-based authentication. The authentication flow:
 
-### Now what?
+1. User signs in/signs up
+2. Token is stored securely using AsyncStorage
+3. Token is included in API requests via Authorization header
+4. Auth state is managed by `AuthContext`
 
-- If you want to add this new React Native code to an existing application, check out the [Integration guide](https://reactnative.dev/docs/integration-with-existing-apps).
-- If you're curious to learn more about React Native, check out the [docs](https://reactnative.dev/docs/getting-started).
+### Backend Requirements
 
-# Troubleshooting
+**Note:** The NextJS backend currently uses NextAuth with cookie-based sessions. For the mobile app to work, you'll need to either:
 
-If you're having issues getting the above steps to work, see the [Troubleshooting](https://reactnative.dev/docs/troubleshooting) page.
+1. **Modify NextAuth to accept Bearer tokens** - Update the NextJS API to accept `Authorization: Bearer <token>` headers
+2. **Create custom auth endpoints** - Create mobile-specific endpoints that return JWT tokens instead of setting cookies
 
-# Learn More
+The auth service (`src/services/authService.ts`) is structured to work with token-based authentication. Once the backend is updated, the integration should work seamlessly.
 
-To learn more about React Native, take a look at the following resources:
+## Navigation
 
-- [React Native Website](https://reactnative.dev) - learn more about React Native.
-- [Getting Started](https://reactnative.dev/docs/environment-setup) - an **overview** of React Native and how setup your environment.
-- [Learn the Basics](https://reactnative.dev/docs/getting-started) - a **guided tour** of the React Native **basics**.
-- [Blog](https://reactnative.dev/blog) - read the latest official React Native **Blog** posts.
-- [`@facebook/react-native`](https://github.com/facebook/react-native) - the Open Source; GitHub **repository** for React Native.
+The app uses React Navigation v6 with:
+- **AuthNavigator**: Handles sign in/sign up screens
+- **MainNavigator**: Handles authenticated app screens
+- **AppNavigator**: Root navigator that switches between auth and main based on authentication state
+
+## Next Steps
+
+1. Update the NextJS backend to support token-based authentication for mobile
+2. Migrate pages from the NextJS app one by one
+3. Add Google OAuth support for mobile (using `@react-native-google-signin/google-signin`)
+4. Implement token refresh mechanism
+5. Add loading states and error boundaries
+6. Style screens to match the web app design
+
+## Development
+
+The project is set up with TypeScript. All new code should be written in TypeScript.
+
+### Code Structure
+
+- **Screens**: Located in `src/screens/`, organized by feature
+- **Components**: Can be added to `src/components/` as needed
+- **Services**: Business logic and API calls in `src/services/`
+- **Types**: TypeScript definitions in `src/types/`
+
+## Troubleshooting
+
+### iOS Build Issues
+
+If you encounter build issues on iOS:
+```bash
+cd ios
+pod deintegrate
+pod install
+cd ..
+```
+
+### Android Build Issues
+
+If you encounter build issues on Android:
+```bash
+cd android
+./gradlew clean
+cd ..
+```
+
+### Metro Bundler Issues
+
+Clear Metro cache:
+```bash
+npm start -- --reset-cache
+```
