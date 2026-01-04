@@ -10,6 +10,7 @@ import { TrackScreen } from '../screens/main/TrackScreen';
 import { DataScreen } from '../screens/main/DataScreen';
 import { PlanScreen } from '../screens/main/PlanScreen';
 import type { RootStackParamList } from './AppNavigator';
+import { GlassTabBar } from '../components/GlassTabBar';
 
 export type MainTabParamList = {
   Track: undefined;
@@ -40,6 +41,7 @@ const AccountHeaderButton: React.FC = () => {
 export const MainNavigator: React.FC = () => {
   return (
     <Tab.Navigator
+      tabBar={(props) => <GlassTabBar {...props} />}
       screenOptions={{
         headerShown: true,
         headerStyle: { backgroundColor: '#1a1a1a' },

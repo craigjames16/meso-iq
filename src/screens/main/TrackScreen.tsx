@@ -12,6 +12,9 @@ import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { workoutService } from '../../services/workoutService';
 import { CurrentMesocycle, PlanInstanceDay } from '../../types/workout';
 import { useNavigation } from '@react-navigation/native';
+import { WorkoutHeatmap } from '../../components/WorkoutHeatmap';
+import { WorkoutCalendar } from '../../components/WorkoutCalendar';
+import { themeColors } from '../../theme/colors';
 import type { CompositeNavigationProp } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -43,7 +46,7 @@ const NextWorkout: React.FC<{
       try {
         console.log('Fetching schedule for mesocycle:', currentMesocycle.id);
         const data = await workoutService.getSchedule(currentMesocycle.id);
-        console.log('Schedule data received:', JSON.stringify(data, null, 2));
+        console.log('Schedule data received:', JSON.stringify(data.upcomingDays, null, 2));
         
         // Get the first upcoming day
         const firstUpcomingDay = data.upcomingDays.length > 0 ? data.upcomingDays[0] : null;
@@ -140,67 +143,80 @@ const NextWorkout: React.FC<{
   
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#fff" />
+      <View style={styles.nextWorkoutHeader}>
+        <View style={styles.nextWorkoutContent}>
+          <ActivityIndicator size="small" color="#fff" />
+        </View>
       </View>
     );
   }
   
   if (error) {
     return (
-      <View style={styles.card}>
-        <Text style={styles.errorText}>
-          Error loading next workout: {error}
-        </Text>
+      <View style={styles.nextWorkoutHeader}>
+        <View style={styles.nextWorkoutContent}>
+          <Text style={styles.errorText}>
+            Error loading next workout: {error}
+          </Text>
+        </View>
       </View>
     );
   }
   
   if (!nextWorkout || !nextWorkout.planDay) {
     return (
-      <View style={styles.card}>
-        <Text style={styles.cardText}>
-          No upcoming workouts found. Please check your mesocycle configuration.
-        </Text>
+      <View style={styles.nextWorkoutHeader}>
+        <View style={styles.nextWorkoutContent}>
+          <Text style={styles.cardText}>
+            No upcoming workouts found. Please check your mesocycle configuration.
+          </Text>
+        </View>
       </View>
     );
   }
   
   const isRestDay = nextWorkout.planDay?.isRestDay || false;
-  const workoutName = nextWorkout.workoutInstance?.workout?.name || nextWorkout.planDay?.workout?.name || 'Workout Day';
   const iterationNumber = nextWorkout.planInstance?.iterationNumber || 'Next';
+  const dayNumber = nextWorkout.planDay?.dayNumber || '?';
   const hasWorkoutInstance = !!nextWorkout.workoutInstance;
   const isWorkoutInProgress = hasWorkoutInstance && !nextWorkout.workoutInstance?.completedAt;
   
+  // Format title as "Week X - Day X"
+  const titleText = typeof iterationNumber === 'number' 
+    ? `Week ${iterationNumber} - Day ${dayNumber}`
+    : `Day ${dayNumber}`;
+  
+  const planName = currentMesocycle?.plan?.name || '';
+
   return (
-    <View style={styles.nextWorkoutCard}>
+    <View style={styles.nextWorkoutHeader}>
       <View style={styles.nextWorkoutContent}>
-        <View style={styles.nextWorkoutHeader}>
+        {isRestDay ? (
           <View style={[
             styles.avatar,
-            { backgroundColor: isRestDay ? '#2196F3' : '#FF6B6B' }
+            { backgroundColor: '#2196F3' }
           ]}>
-            {isRestDay ? (
-              <Text style={styles.avatarText}>
-                {nextWorkout.planDay?.dayNumber || 'R'}
-              </Text>
-            ) : (
-              <MaterialIcons name="fitness-center" size={20} color="#fff" />
-            )}
-          </View>
-          <View style={styles.nextWorkoutInfo}>
-            <Text style={styles.nextWorkoutTitle}>
-              Day {nextWorkout.planDay?.dayNumber || '?'}: {isRestDay ? 'Rest Day' : workoutName}
+            <Text style={styles.avatarText}>
+              {dayNumber}
             </Text>
+          </View>
+        ) : (
+          <MaterialIcons name="fitness-center" size={24} color={themeColors.primary.main} />
+        )}
+        <View style={styles.nextWorkoutInfo}>
+          <Text style={styles.nextWorkoutTitle}>
+            {titleText}
+          </Text>
+          {planName ? (
             <Text style={styles.nextWorkoutSubtitle}>
-              {typeof iterationNumber === 'number' ? `Week ${iterationNumber}` : iterationNumber}
+              {planName}
             </Text>
-          </View>
+          ) : null}
         </View>
         
         <TouchableOpacity
           style={[
-            styles.startButton,
+            styles.playButton,
             isRestDay ? styles.restButton : styles.workoutButton,
             isStartingWorkout && styles.buttonDisabled
           ]}
@@ -210,18 +226,8 @@ const NextWorkout: React.FC<{
           <MaterialIcons 
             name={isRestDay ? "check" : "play-arrow"} 
             size={20} 
-            color="#fff" 
-            style={styles.buttonIcon}
+            color={"#fff"} 
           />
-          <Text style={styles.buttonText}>
-            {isStartingWorkout 
-              ? (isRestDay ? 'Completing...' : 'Starting...') 
-              : (isRestDay 
-                  ? 'Complete Rest Day' 
-                  : (isWorkoutInProgress ? 'Continue Workout' : 'Start Workout')
-                )
-            }
-          </Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -325,17 +331,17 @@ export const TrackScreen: React.FC = () => {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Track Workout</Text>
-      </View>
-
+    <View style={styles.container}>
       <NextWorkout 
         currentMesocycle={currentMesocycle} 
         onStartWorkout={startWorkoutInstance}
         isStartingWorkout={isStartingWorkout}
       />
-    </ScrollView>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.contentContainer}>
+        <WorkoutCalendar mesocycleId={currentMesocycle?.id || null} />
+        <WorkoutHeatmap mesocycleId={currentMesocycle?.id || null} />
+      </ScrollView>
+    </View>
   );
 };
 
@@ -343,6 +349,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#1a1a1a',
+  },
+  scrollView: {
+    flex: 1,
   },
   contentContainer: {
     padding: 20,
@@ -379,23 +388,14 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
   },
-  nextWorkoutCard: {
-    backgroundColor: '#2a2a2a',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
+  nextWorkoutHeader: {
+    backgroundColor: '#1a1a1a',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
   },
   nextWorkoutContent: {
-    gap: 16,
-  },
-  nextWorkoutHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
@@ -419,36 +419,26 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     color: '#fff',
-    marginBottom: 4,
   },
   nextWorkoutSubtitle: {
     fontSize: 14,
-    color: '#999',
+    color: 'rgba(255, 255, 255, 0.6)',
+    marginTop: 2,
   },
-  startButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  playButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 8,
-    gap: 8,
+    alignItems: 'center',
   },
   workoutButton: {
-    backgroundColor: '#FF6B6B',
+    backgroundColor: themeColors.primary.main,
   },
   restButton: {
     backgroundColor: '#2196F3',
   },
   buttonDisabled: {
     opacity: 0.6,
-  },
-  buttonIcon: {
-    marginRight: 4,
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
   },
 });

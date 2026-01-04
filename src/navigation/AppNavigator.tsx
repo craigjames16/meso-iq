@@ -7,12 +7,18 @@ import { AuthNavigator } from './AuthNavigator';
 import { MainNavigator } from './MainNavigator';
 import { WorkoutDetailScreen } from '../screens/workout/WorkoutDetailScreen';
 import { AccountSettingsScreen } from '../screens/main/AccountSettingsScreen';
+import { PlanDetailScreen } from '../screens/plan/PlanDetailScreen';
+import { EditPlanScreen } from '../screens/plan/EditPlanScreen';
+import { MesocycleDetailScreen } from '../screens/mesocycle/MesocycleDetailScreen';
 import type { MainTabParamList } from './MainNavigator';
 
 export type RootStackParamList = {
   Main: undefined;
   WorkoutDetail: { workoutInstanceId: number };
   AccountSettings: undefined;
+  PlanDetail: { planId: number };
+  EditPlan: { planId: number };
+  MesocycleDetail: { mesocycleId: number };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -58,6 +64,39 @@ export const AppNavigator: React.FC = () => {
               headerTintColor: '#fff',
               headerTitleStyle: { fontWeight: 'bold' },
               title: 'Account Settings',
+            }}
+          />
+          <Stack.Screen 
+            name="PlanDetail" 
+            component={PlanDetailScreen}
+            options={{
+              headerShown: true,
+              headerStyle: { backgroundColor: '#1a1a1a' },
+              headerTintColor: '#fff',
+              headerTitleStyle: { fontWeight: 'bold' },
+              title: 'Plan Details',
+            }}
+          />
+          <Stack.Screen 
+            name="EditPlan" 
+            component={EditPlanScreen}
+            options={{
+              headerShown: true,
+              headerStyle: { backgroundColor: '#1a1a1a' },
+              headerTintColor: '#fff',
+              headerTitleStyle: { fontWeight: 'bold' },
+              title: 'Edit Plan',
+            }}
+          />
+          <Stack.Screen 
+            name="MesocycleDetail" 
+            component={MesocycleDetailScreen}
+            options={{
+              headerShown: true,
+              headerStyle: { backgroundColor: '#1a1a1a' },
+              headerTintColor: '#fff',
+              headerTitleStyle: { fontWeight: 'bold' },
+              title: 'Mesocycle Details',
             }}
           />
         </Stack.Navigator>

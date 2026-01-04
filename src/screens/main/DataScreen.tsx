@@ -11,14 +11,22 @@ import {
   MesocycleSelect,
   VolumeSetRadarChart,
   MuscleGroupBarChart,
-  VolumeSetsToggle,
+  SegmentedControl,
   DisplayMode,
+  MesocycleProgress,
+  ExerciseDataTab,
 } from '../../components/data';
 import { dashboardService, MuscleGroupData } from '../../services/dashboardService';
+import { ExerciseStats } from '../../types/exercise';
 import { themeColors, spacing } from '../../theme/colors';
 
+type DataTab = 'analytics' | 'mesocycle' | 'exercises' | string;
+
 export const DataScreen: React.FC = () => {
-  // State
+  // Tab state
+  const [activeTab, setActiveTab] = useState<DataTab>('analytics');
+
+  // Analytics tab state
   const [selectedMesocycleId, setSelectedMesocycleId] = useState<number | 'all'>('all');
   const [volumeData, setVolumeData] = useState<MuscleGroupData | null>(null);
   const [setData, setSetData] = useState<MuscleGroupData | null>(null);
@@ -26,6 +34,11 @@ export const DataScreen: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Exercise tab state
+  const [exerciseStats, setExerciseStats] = useState<ExerciseStats | null>(null);
+  const [exerciseLoading, setExerciseLoading] = useState(false);
+  const [exerciseError, setExerciseError] = useState<string | null>(null);
 
   // Get unique muscle groups from data
   const muscleGroups = useMemo(() => {
@@ -62,6 +75,26 @@ export const DataScreen: React.FC = () => {
     fetchData();
   }, [selectedMesocycleId]);
 
+  // Fetch exercise stats when exercises tab is active
+  useEffect(() => {
+    if (activeTab === 'exercises' && !exerciseStats && !exerciseLoading) {
+      const fetchExerciseStats = async () => {
+        try {
+          setExerciseLoading(true);
+          setExerciseError(null);
+          const stats = await dashboardService.getExerciseStats();
+          setExerciseStats(stats);
+        } catch (err: any) {
+          console.error('Error fetching exercise stats:', err);
+          setExerciseError(err.message || 'Failed to fetch exercise stats');
+        } finally {
+          setExerciseLoading(false);
+        }
+      };
+      fetchExerciseStats();
+    }
+  }, [activeTab, exerciseStats, exerciseLoading]);
+
   // Handle refresh
   const handleRefresh = () => {
     setRefreshing(true);
@@ -74,8 +107,8 @@ export const DataScreen: React.FC = () => {
   };
 
   // Handle display mode change
-  const handleDisplayModeChange = (mode: DisplayMode) => {
-    setDisplayMode(mode);
+  const handleDisplayModeChange = (mode: string) => {
+    setDisplayMode(mode as DisplayMode);
   };
 
   // Loading state (initial load)
@@ -104,67 +137,120 @@ export const DataScreen: React.FC = () => {
     ? 'All Time Volume & Sets' 
     : 'Mesocycle Volume & Sets';
 
+  const tabs = [
+    { label: 'Analytics', value: 'analytics' },
+    { label: 'Mesocycle', value: 'mesocycle' },
+    { label: 'Exercises', value: 'exercises' },
+  ];
+
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.contentContainer}
-      showsVerticalScrollIndicator={false}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={handleRefresh}
-          tintColor={themeColors.primary.main}
-          colors={[themeColors.primary.main]}
-        />
-      }
-    >
-      {/* Mesocycle Filter */}
-      <MesocycleSelect
-        value={selectedMesocycleId}
-        onChange={handleMesocycleChange}
-        showAllTime
-      />
-
-      {/* Radar Chart */}
-      <VolumeSetRadarChart
-        volumeData={volumeData}
-        setData={setData}
-        title={radarTitle}
-        loading={loading}
-        error={error}
-      />
-
-      {/* Volume/Sets Toggle */}
-      <View style={styles.toggleContainer}>
-        <VolumeSetsToggle
-          value={displayMode}
-          onChange={handleDisplayModeChange}
+    <View style={styles.container}>
+      {/* Tab Switcher */}
+      <View style={styles.tabContainer}>
+        <SegmentedControl
+          segments={tabs}
+          value={activeTab}
+          onChange={(value) => setActiveTab(value)}
         />
       </View>
 
-      {/* Bar Charts per Muscle Group */}
-      {muscleGroups.map(muscleGroup => (
-        <MuscleGroupBarChart
-          key={muscleGroup}
-          muscleGroup={muscleGroup}
-          volumeInstances={volumeData?.[muscleGroup] || []}
-          setInstances={setData?.[muscleGroup] || []}
-          mode={displayMode}
-        />
-      ))}
+      {/* Tab Content */}
+      {activeTab === 'analytics' && (
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.contentContainer}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor={themeColors.primary.main}
+              colors={[themeColors.primary.main]}
+            />
+          }
+        >
+          {/* Mesocycle Filter */}
+          <MesocycleSelect
+            value={selectedMesocycleId}
+            onChange={handleMesocycleChange}
+            showAllTime
+          />
 
-      {/* Empty State */}
-      {muscleGroups.length === 0 && !loading && (
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyText}>
-            No data available for the selected period.
-          </Text>
-          <Text style={styles.emptySubtext}>
-            Complete some workouts to see your muscle group analytics.
-          </Text>
-        </View>
+          {/* Radar Chart */}
+          <VolumeSetRadarChart
+            volumeData={volumeData}
+            setData={setData}
+            title={radarTitle}
+            loading={loading}
+            error={error}
+          />
+
+          {/* Volume/Sets Toggle */}
+          <View style={styles.toggleContainer}>
+            <SegmentedControl
+              segments={[
+                { label: 'Volume', value: 'volume' },
+                { label: 'Sets', value: 'sets' },
+              ]}
+              value={displayMode}
+              onChange={handleDisplayModeChange}
+              alignSelf={true}
+              containerStyle={{ marginBottom: 0 }}
+            />
+          </View>
+
+          {/* Bar Charts per Muscle Group */}
+          {muscleGroups.map(muscleGroup => (
+            <MuscleGroupBarChart
+              key={muscleGroup}
+              muscleGroup={muscleGroup}
+              volumeInstances={volumeData?.[muscleGroup] || []}
+              setInstances={setData?.[muscleGroup] || []}
+              mode={displayMode}
+            />
+          ))}
+
+          {/* Empty State */}
+          {muscleGroups.length === 0 && !loading && (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyText}>
+                No data available for the selected period.
+              </Text>
+              <Text style={styles.emptySubtext}>
+                Complete some workouts to see your muscle group analytics.
+              </Text>
+            </View>
+          )}
+        </ScrollView>
       )}
-    </ScrollView>
+
+      {activeTab === 'mesocycle' && (
+        <MesocycleProgress />
+      )}
+
+      {activeTab === 'exercises' && (
+        <>
+          {exerciseLoading ? (
+            <View style={[styles.container, styles.centerContent]}>
+              <ActivityIndicator size="large" color={themeColors.primary.main} />
+              <Text style={styles.loadingText}>Loading exercise data...</Text>
+            </View>
+          ) : exerciseError ? (
+            <View style={[styles.container, styles.centerContent]}>
+              <Text style={styles.errorText}>{exerciseError}</Text>
+              <Text style={styles.retryText} onPress={() => {
+                setExerciseStats(null);
+                setExerciseError(null);
+              }}>
+                Tap to retry
+              </Text>
+            </View>
+          ) : (
+            <ExerciseDataTab exerciseStats={exerciseStats} />
+          )}
+        </>
+      )}
+    </View>
   );
 };
 
@@ -173,9 +259,16 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: themeColors.background.primary,
   },
+  tabContainer: {
+    padding: spacing.sm,
+    paddingBottom: spacing.sm,
+  },
+  scrollView: {
+    flex: 1,
+  },
   contentContainer: {
-    padding: spacing.md,
-    paddingBottom: spacing.xl * 2,
+    padding: spacing.sm,
+    paddingBottom: spacing.xl * 3,
   },
   centerContent: {
     justifyContent: 'center',

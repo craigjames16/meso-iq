@@ -1,7 +1,26 @@
-import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, Dimensions, ActivityIndicator } from 'react-native';
+import React, { useMemo, useRef, useEffect } from 'react';
+import { View, Text, StyleSheet, ActivityIndicator, useWindowDimensions } from 'react-native';
+import { SvgChart, SVGRenderer } from '@wuba/react-native-echarts';
+import * as echarts from 'echarts/core';
+import { RadarChart } from 'echarts/charts';
+import {
+  TitleComponent,
+  TooltipComponent,
+  LegendComponent,
+  RadarComponent,
+} from 'echarts/components';
 import { themeColors, borderRadius, spacing } from '../../theme/colors';
 import { MuscleGroupData } from '../../utils/chartUtils';
+
+// Register echarts components
+echarts.use([
+  TitleComponent,
+  TooltipComponent,
+  LegendComponent,
+  RadarComponent,
+  SVGRenderer,
+  RadarChart,
+]);
 
 interface VolumeSetRadarChartProps {
   volumeData: MuscleGroupData | null;
@@ -11,7 +30,7 @@ interface VolumeSetRadarChartProps {
   error?: string | null;
 }
 
-const { width: screenWidth } = Dimensions.get('window');
+const CHART_HEIGHT = 350;
 
 // Muscle group display order
 const MUSCLE_GROUPS = [
@@ -41,6 +60,10 @@ export const VolumeSetRadarChart: React.FC<VolumeSetRadarChartProps> = ({
   loading = false,
   error = null,
 }) => {
+  const chartRef = useRef<any>(null);
+  const { width: screenWidth } = useWindowDimensions();
+  const chartWidth = screenWidth - spacing.md * 4; // Account for container padding
+
   const metrics = useMemo<MuscleMetric[]>(() => {
     if (!volumeData && !setData) return [];
 
@@ -80,6 +103,159 @@ export const VolumeSetRadarChart: React.FC<VolumeSetRadarChartProps> = ({
     });
   }, [volumeData, setData]);
 
+  const chartOption = useMemo(() => {
+    if (metrics.length === 0) return null;
+
+    const maxVolume = Math.max(...metrics.map((m) => m.volumeTotal), 1);
+    const maxSets = Math.max(...metrics.map((m) => m.setTotal), 1);
+
+    const indicators = metrics.map((metric) => ({
+      name: metric.muscleGroup,
+      max: 100, // Normalized to 100 for percentage display
+    }));
+
+    const volumeDataNormalized = metrics.map((metric) =>
+      Math.round((metric.volumeTotal / maxVolume) * 100)
+    );
+    const setsDataNormalized = metrics.map((metric) =>
+      Math.round((metric.setTotal / maxSets) * 100)
+    );
+
+    return {
+      backgroundColor: 'transparent',
+      title: {
+        text: title,
+        left: 'center',
+        top: 10,
+        textStyle: {
+          color: themeColors.text.primary,
+          fontSize: 16,
+          fontWeight: '700',
+        },
+      },
+      tooltip: {
+        trigger: 'item',
+        backgroundColor: themeColors.background.secondary,
+        borderColor: themeColors.border.default,
+        borderWidth: 1,
+        textStyle: {
+          color: themeColors.text.primary,
+        },
+        formatter: (params: any) => {
+          const index = params.dataIndex;
+          const metric = metrics[index];
+          const volumeFormatted =
+            metric.volumeTotal >= 1000
+              ? `${(metric.volumeTotal / 1000).toFixed(1)}k`
+              : metric.volumeTotal;
+          return `${metric.muscleGroup}<br/>${params.seriesName}: ${params.value}%<br/>Volume: ${volumeFormatted} lbs<br/>Sets: ${metric.setTotal}`;
+        },
+      },
+      legend: {
+        data: ['Volume', 'Sets'],
+        bottom: 0,
+        textStyle: {
+          color: themeColors.text.secondary,
+        },
+        itemStyle: {
+          borderColor: themeColors.border.default,
+        },
+      },
+      radar: {
+        indicator: indicators,
+        center: ['50%', '55%'],
+        radius: '65%',
+        name: {
+          textStyle: {
+            color: themeColors.text.secondary,
+            fontSize: 11,
+          },
+        },
+        splitArea: {
+          areaStyle: {
+            color: [
+              'rgba(255, 255, 255, 0.02)',
+              'rgba(255, 255, 255, 0.04)',
+              'rgba(255, 255, 255, 0.06)',
+              'rgba(255, 255, 255, 0.08)',
+            ],
+          },
+        },
+        splitLine: {
+          lineStyle: {
+            color: themeColors.border.default,
+          },
+        },
+        axisLine: {
+          lineStyle: {
+            color: themeColors.border.default,
+          },
+        },
+      },
+      series: [
+        {
+          name: 'Volume',
+          type: 'radar',
+          data: [
+            {
+              value: volumeDataNormalized,
+              name: 'Volume',
+              areaStyle: {
+                color: themeColors.primary.main,
+                opacity: 0.3,
+              },
+              lineStyle: {
+                color: themeColors.primary.main,
+                width: 2,
+              },
+              itemStyle: {
+                color: themeColors.primary.main,
+              },
+            },
+          ],
+        },
+        {
+          name: 'Sets',
+          type: 'radar',
+          color: themeColors.chart.sets,
+          data: [
+            {
+              value: setsDataNormalized,
+              name: 'Sets',
+              areaStyle: {
+                color: themeColors.chart.sets,
+                opacity: 0.3,
+              },
+              lineStyle: {
+                color: themeColors.chart.sets,
+                width: 2,
+              },
+              itemStyle: {
+                color: themeColors.chart.sets,
+                borderWidth: 2,
+              },
+            },
+          ],
+        },
+      ],
+    };
+  }, [metrics, title]);
+
+  useEffect(() => {
+    let chart: any;
+    if (chartRef.current && chartOption) {
+      chart = echarts.init(chartRef.current, 'dark', {
+        renderer: 'svg',
+        width: chartWidth,
+        height: CHART_HEIGHT,
+      });
+      chart.setOption(chartOption);
+    }
+    return () => {
+      chart?.dispose();
+    };
+  }, [chartOption, chartWidth]);
+
   if (loading) {
     return (
       <View style={[styles.container, styles.centerContent]}>
@@ -105,63 +281,10 @@ export const VolumeSetRadarChart: React.FC<VolumeSetRadarChartProps> = ({
     );
   }
 
-  const maxVolume = Math.max(...metrics.map((m) => m.volumeTotal), 1);
-  const maxSets = Math.max(...metrics.map((m) => m.setTotal), 1);
-
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>{title}</Text>
-
-      <View style={styles.summaryContainer}>
-        {metrics.map((metric) => {
-          const volumePct = (metric.volumeTotal / maxVolume) * 100;
-          const setPct = (metric.setTotal / maxSets) * 100;
-
-          return (
-            <View key={metric.muscleGroup} style={styles.metricRow}>
-              <Text style={styles.muscleGroupLabel}>{metric.muscleGroup}</Text>
-              <View style={styles.barsContainer}>
-                <View style={styles.barWrapper}>
-                  <View
-                    style={[
-                      styles.bar,
-                      styles.volumeBar,
-                      { width: `${Math.max(volumePct, 2)}%` },
-                    ]}
-                  />
-                </View>
-                <View style={styles.barWrapper}>
-                  <View
-                    style={[
-                      styles.bar,
-                      styles.setsBar,
-                      { width: `${Math.max(setPct, 2)}%` },
-                    ]}
-                  />
-                </View>
-              </View>
-              <View style={styles.valuesContainer}>
-                <Text style={styles.volumeValue}>
-                  {metric.volumeTotal >= 1000
-                    ? `${(metric.volumeTotal / 1000).toFixed(1)}k`
-                    : metric.volumeTotal}
-                </Text>
-                <Text style={styles.setsValue}>{metric.setTotal}</Text>
-              </View>
-            </View>
-          );
-        })}
-      </View>
-
-      <View style={styles.legendContainer}>
-        <View style={styles.legendItem}>
-          <View style={[styles.legendColor, { backgroundColor: themeColors.primary.main }]} />
-          <Text style={styles.legendText}>Volume (lbs)</Text>
-        </View>
-        <View style={styles.legendItem}>
-          <View style={[styles.legendColor, { backgroundColor: themeColors.accent.warning }]} />
-          <Text style={styles.legendText}>Sets</Text>
-        </View>
+      <View style={styles.chartContainer}>
+        <SvgChart ref={chartRef} />
       </View>
     </View>
   );
@@ -169,7 +292,7 @@ export const VolumeSetRadarChart: React.FC<VolumeSetRadarChartProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: themeColors.background.surface,
+    // backgroundColor: themeColors.background.surface,
     borderRadius: borderRadius.lg,
     borderWidth: 1,
     borderColor: themeColors.border.default,
@@ -183,12 +306,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     minHeight: 200,
   },
-  title: {
-    color: themeColors.text.primary,
-    fontSize: 16,
-    fontWeight: '700',
-    textAlign: 'center',
-    marginBottom: spacing.md,
+  chartContainer: {
+    width: '100%',
+    height: CHART_HEIGHT,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   loadingText: {
     color: themeColors.text.secondary,
@@ -205,76 +327,5 @@ const styles = StyleSheet.create({
     color: themeColors.text.secondary,
     fontSize: 14,
     textAlign: 'center',
-  },
-  summaryContainer: {
-    gap: spacing.sm,
-  },
-  metricRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  muscleGroupLabel: {
-    color: themeColors.text.secondary,
-    fontSize: 11,
-    width: 70,
-  },
-  barsContainer: {
-    flex: 1,
-    gap: 3,
-  },
-  barWrapper: {
-    height: 8,
-    backgroundColor: themeColors.background.elevated,
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  bar: {
-    height: '100%',
-    borderRadius: 4,
-  },
-  volumeBar: {
-    backgroundColor: themeColors.primary.main,
-  },
-  setsBar: {
-    backgroundColor: themeColors.accent.warning,
-  },
-  valuesContainer: {
-    width: 60,
-    alignItems: 'flex-end',
-    gap: 2,
-  },
-  volumeValue: {
-    color: themeColors.primary.light,
-    fontSize: 10,
-    fontWeight: '600',
-  },
-  setsValue: {
-    color: themeColors.accent.warning,
-    fontSize: 10,
-    fontWeight: '600',
-  },
-  legendContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: spacing.lg,
-    marginTop: spacing.md,
-    paddingTop: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: themeColors.border.default,
-  },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  legendColor: {
-    width: 12,
-    height: 12,
-    borderRadius: 2,
-  },
-  legendText: {
-    color: themeColors.text.secondary,
-    fontSize: 12,
   },
 });

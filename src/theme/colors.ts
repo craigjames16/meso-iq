@@ -2,9 +2,11 @@
 export const themeColors = {
   // Primary colors
   primary: {
-    main: '#8884d8',
-    light: '#a5a1e8',
-    dark: '#6b67c8',
+    main: 'rgb(45, 115, 212)',
+    //color rgb(13, 47, 94)
+
+    light: 'rgb(97, 162, 255)',
+    dark: 'rgb(43, 57, 79)',
   },
   
   // Accent colors
@@ -46,8 +48,8 @@ export const themeColors = {
   
   // Chart specific colors
   chart: {
-    volume: '#8884d8',
-    sets: '#ff7300',
+    volume: 'rgb(45, 115, 212)',
+    sets: '#8884d8',
     gridLine: 'rgba(255, 255, 255, 0.2)',
     axisLabel: 'rgba(255, 255, 255, 0.85)',
   },

@@ -1,13 +1,14 @@
 // API Configuration
-// For iOS simulator, use 'http://localhost:3000'
-// For Android emulator, use 'http://10.0.2.2:3000'
-// For physical device, use your computer's IP address (e.g., 'http://192.168.1.100:3000')
+// __DEV__ is true in Debug builds, false in Release builds
 
 const getApiUrl = (): string => {
-  // You can override this with an environment variable or config file
-  // For now, defaulting to localhost (works for iOS simulator)
-  // Android emulator users should change this to 'http://10.0.2.2:3000'
-  return 'http://localhost:3000';
+  if (__DEV__) {
+    // Development: iOS simulator uses localhost, Android emulator uses 10.0.2.2
+    // For physical device testing, use your computer's IP (e.g., 'http://192.168.1.100:3000')
+    return 'http://10.0.0.208:3000';
+  }
+  // Production: your deployed API URL
+  return 'https://tracker.craigchisholm.me';
 };
 
 export const API_URL = getApiUrl();
@@ -21,6 +22,9 @@ export const API_ENDPOINTS = {
   },
   MESOCYCLES: {
     LIST: '/api/mesocycles',
+    GET: (id: number) => `/api/mesocycles/${id}`,
+    DELETE: (id: number) => `/api/mesocycles/${id}`,
+    COMPLETE: (id: number) => `/api/mesocycles/${id}`,
     SCHEDULE: (id: number) => `/api/mesocycles/${id}/schedule`,
   },
   PLAN_INSTANCES: {
@@ -31,6 +35,7 @@ export const API_ENDPOINTS = {
       `/api/plan-instances/${instanceId}/days/${dayId}/complete-rest`,
   },
   WORKOUT_INSTANCES: {
+    LIST: '/api/workout-instances',
     GET: (id: number) => `/api/workout-instances/${id}`,
     COMPLETE: (id: number) => `/api/workout-instances/${id}/complete`,
     SETS: (id: number) => `/api/workout-instances/${id}/sets`,
@@ -39,6 +44,10 @@ export const API_ENDPOINTS = {
   },
   EXERCISES: {
     LIST: '/api/exercises',
+  },
+  PLANS: {
+    LIST: '/api/plans',
+    GET: (id: number) => `/api/plans/${id}`,
   },
   DASHBOARD: {
     MUSCLE_GROUP_VOLUME: (mesocycleId?: number) =>
@@ -49,6 +58,8 @@ export const API_ENDPOINTS = {
       mesocycleId
         ? `/api/dashboard?data=mesocycleMuscleGroupSets&mesocycleId=${mesocycleId}`
         : `/api/dashboard?data=muscleGroupSets`,
+    MESOCYCLE_PROGRESS: (id: number) => `/api/dashboard?data=mesocycle&id=${id}`,
+    EXERCISE_STATS: '/api/dashboard?data=exerciseStats',
   },
 };
 

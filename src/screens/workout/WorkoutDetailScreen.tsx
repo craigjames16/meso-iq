@@ -6,7 +6,6 @@ import {
   ActivityIndicator,
   ScrollView,
   TouchableOpacity,
-  TextInput,
   Alert,
   Modal,
   FlatList,
@@ -16,29 +15,11 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { workoutService } from '../../services/workoutService';
 import type { RootStackParamList } from '../../navigation/AppNavigator';
+import { ExerciseTrackingCard, type ExerciseTracking, type ExerciseSet } from '../../components/ExerciseTrackingCard';
+import type { HistoryInstance } from '../../components/ExerciseHistoryModal';
 
 type WorkoutDetailScreenRouteProp = RouteProp<RootStackParamList, 'WorkoutDetail'>;
 type WorkoutDetailScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'WorkoutDetail'>;
-
-interface ExerciseSet {
-  id?: number;
-  reps: number;
-  weight: number;
-  setNumber?: number;
-  completed?: boolean;
-  lastSet?: {
-    reps: number;
-    weight: number;
-    setNumber: number;
-  } | null;
-}
-
-interface ExerciseTracking {
-  exerciseId: number;
-  exerciseName: string;
-  order: number;
-  sets: ExerciseSet[];
-}
 
 export const WorkoutDetailScreen: React.FC = () => {
   const route = useRoute<WorkoutDetailScreenRouteProp>();
@@ -50,10 +31,6 @@ export const WorkoutDetailScreen: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [completing, setCompleting] = useState(false);
-  const [exerciseMenuVisible, setExerciseMenuVisible] = useState(false);
-  const [activeExerciseIndex, setActiveExerciseIndex] = useState<number | null>(null);
-  const [setMenuVisible, setSetMenuVisible] = useState(false);
-  const [activeSet, setActiveSet] = useState<{ exerciseIndex: number; setIndex: number } | null>(null);
   const [addExerciseModalVisible, setAddExerciseModalVisible] = useState(false);
   const [availableExercises, setAvailableExercises] = useState<any[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
@@ -75,7 +52,7 @@ export const WorkoutDetailScreen: React.FC = () => {
 
       setWorkoutInstance(workoutData);
 
-      // Process exercises data - it comes grouped by category
+      // Process exercises data - it comes grouped by category with workoutInstances (history)
       console.log('Exercises data received:', JSON.stringify(exercisesData, null, 2));
       console.log('Exercises data type:', typeof exercisesData, Array.isArray(exercisesData));
       
@@ -102,6 +79,10 @@ export const WorkoutDetailScreen: React.FC = () => {
       console.log('Processed exercises array:', exercisesArray.length, 'exercises');
       console.log('Sample exercise:', exercisesArray[0]);
       setAvailableExercises(exercisesArray);
+      
+      // Get current mesocycle ID from workout data
+      const currentMesocycleId = workoutData.mesocycleId || 
+        workoutData.planInstanceDays?.[0]?.planInstance?.mesocycle?.id;
 
       // Process exercise sets
       const completedSetsMap = workoutData.exerciseSets?.reduce((acc: Record<number, any[]>, set: any) => {
@@ -149,11 +130,45 @@ export const WorkoutDetailScreen: React.FC = () => {
           });
         }
 
+        // Find the exercise history from available exercises
+        const currentExercise = exercisesArray.find(
+          (ex: any) => ex.id === workoutExercise.exercise.id
+        );
+        
+        // Get all workout instances for this exercise (history)
+        const history: HistoryInstance[] = currentExercise?.workoutInstances
+          ?.filter((instance: any) => instance.completedAt)
+          ?.map((instance: any) => ({
+            workoutInstanceId: instance.workoutInstanceId,
+            volume: instance.volume,
+            completedAt: instance.completedAt,
+            sets: instance.sets || [],
+          })) || [];
+        
+        // Filter mesocycle-specific history (same mesocycle, but not current workout)
+        const mesocycleHistory: HistoryInstance[] = currentExercise?.workoutInstances
+          ?.filter((instance: any) => 
+            instance.mesocycleId === currentMesocycleId && 
+            instance.workoutInstanceId !== workoutData.id &&
+            instance.completedAt
+          )
+          ?.sort((a: any, b: any) => 
+            new Date(a.completedAt).getTime() - new Date(b.completedAt).getTime()
+          )
+          ?.map((instance: any) => ({
+            workoutInstanceId: instance.workoutInstanceId,
+            volume: instance.volume,
+            completedAt: instance.completedAt,
+            sets: instance.sets || [],
+          })) || [];
+
         return {
           exerciseId: workoutExercise.exercise.id,
           exerciseName: workoutExercise.exercise.name,
           sets,
           order: workoutExercise.order,
+          history,
+          mesocycleHistory,
         };
       });
 
@@ -265,21 +280,10 @@ export const WorkoutDetailScreen: React.FC = () => {
     }
   };
 
-  const handleExerciseMenuOpen = (exerciseIndex: number) => {
-    setActiveExerciseIndex(exerciseIndex);
-    setExerciseMenuVisible(true);
-  };
-
-  const handleExerciseMenuClose = () => {
-    setExerciseMenuVisible(false);
-    setActiveExerciseIndex(null);
-  };
-
   const handleAddSet = (exerciseIndex: number) => {
     setExerciseTrackings((prev) => {
       const updated = [...prev];
       const exercise = updated[exerciseIndex];
-      const lastSet = exercise.sets[exercise.sets.length - 1];
       const matchingLastSet = workoutInstance?.workoutExercises
         ?.find((we: any) => we.exercise.id === exercise.exerciseId)
         ?.lastSets?.find((ls: any) => ls.setNumber === exercise.sets.length + 1);
@@ -298,35 +302,19 @@ export const WorkoutDetailScreen: React.FC = () => {
       };
       return updated;
     });
-    handleExerciseMenuClose();
   };
 
   const handleRemoveExercise = async (exerciseIndex: number) => {
     const exercise = exerciseTrackings[exerciseIndex];
     
-    Alert.alert(
-      'Delete Exercise',
-      `Are you sure you want to remove ${exercise.exerciseName}?`,
-      [
-        { text: 'Cancel', style: 'cancel', onPress: handleExerciseMenuClose },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await workoutService.removeExercise(workoutInstanceId, exercise.exerciseId);
-              
-              // Refresh workout data
-              await fetchWorkoutData();
-              handleExerciseMenuClose();
-            } catch (err) {
-              console.error('Error removing exercise:', err);
-              Alert.alert('Error', err instanceof Error ? err.message : 'Failed to remove exercise');
-            }
-          },
-        },
-      ]
-    );
+    try {
+      await workoutService.removeExercise(workoutInstanceId, exercise.exerciseId);
+      // Refresh workout data
+      await fetchWorkoutData();
+    } catch (err) {
+      console.error('Error removing exercise:', err);
+      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to remove exercise');
+    }
   };
 
   const handleReorderExercise = async (exerciseIndex: number, direction: 'up' | 'down') => {
@@ -346,27 +334,13 @@ export const WorkoutDetailScreen: React.FC = () => {
 
         return updated;
       });
-      handleExerciseMenuClose();
     } catch (err) {
       console.error('Error reordering exercise:', err);
       Alert.alert('Error', err instanceof Error ? err.message : 'Failed to reorder exercise');
     }
   };
 
-  const handleSetMenuOpen = (exerciseIndex: number, setIndex: number) => {
-    setActiveSet({ exerciseIndex, setIndex });
-    setSetMenuVisible(true);
-  };
-
-  const handleSetMenuClose = () => {
-    setSetMenuVisible(false);
-    setActiveSet(null);
-  };
-
-  const handleRemoveSet = async () => {
-    if (!activeSet) return;
-
-    const { exerciseIndex, setIndex } = activeSet;
+  const handleRemoveSet = async (exerciseIndex: number, setIndex: number) => {
     const tracking = exerciseTrackings[exerciseIndex];
     const set = tracking.sets[setIndex];
 
@@ -377,7 +351,6 @@ export const WorkoutDetailScreen: React.FC = () => {
       } catch (err) {
         console.error('Error deleting set:', err);
         Alert.alert('Error', err instanceof Error ? err.message : 'Failed to delete set');
-        handleSetMenuClose();
         return;
       }
     }
@@ -396,8 +369,6 @@ export const WorkoutDetailScreen: React.FC = () => {
       };
       return updated;
     });
-
-    handleSetMenuClose();
   };
 
   const handleAddExercise = async () => {
@@ -415,6 +386,42 @@ export const WorkoutDetailScreen: React.FC = () => {
       );
 
       if (newExercise) {
+        // Find the exercise to get history data
+        const currentExercise = availableExercises.find(
+          (ex: any) => ex.id === newExercise.exercise.id
+        );
+        
+        // Get current mesocycle ID
+        const currentMesocycleId = workoutData.mesocycleId || 
+          workoutData.planInstanceDays?.[0]?.planInstance?.mesocycle?.id;
+        
+        // Get all workout instances for this exercise (history)
+        const history: HistoryInstance[] = currentExercise?.workoutInstances
+          ?.filter((instance: any) => instance.completedAt)
+          ?.map((instance: any) => ({
+            workoutInstanceId: instance.workoutInstanceId,
+            volume: instance.volume,
+            completedAt: instance.completedAt,
+            sets: instance.sets || [],
+          })) || [];
+        
+        // Filter mesocycle-specific history
+        const mesocycleHistory: HistoryInstance[] = currentExercise?.workoutInstances
+          ?.filter((instance: any) => 
+            instance.mesocycleId === currentMesocycleId && 
+            instance.workoutInstanceId !== workoutData.id &&
+            instance.completedAt
+          )
+          ?.sort((a: any, b: any) => 
+            new Date(a.completedAt).getTime() - new Date(b.completedAt).getTime()
+          )
+          ?.map((instance: any) => ({
+            workoutInstanceId: instance.workoutInstanceId,
+            volume: instance.volume,
+            completedAt: instance.completedAt,
+            sets: instance.sets || [],
+          })) || [];
+
         const numSets = newExercise.lastSets?.length || 3;
         const newExerciseTracking: ExerciseTracking = {
           exerciseId: newExercise.exercise.id,
@@ -431,6 +438,8 @@ export const WorkoutDetailScreen: React.FC = () => {
               lastSet: matchingLastSet || null,
             };
           }),
+          history,
+          mesocycleHistory,
         };
 
         setExerciseTrackings((prev) => {
@@ -521,80 +530,21 @@ export const WorkoutDetailScreen: React.FC = () => {
           </View>
         ) : (
           exerciseTrackings.map((exercise, exerciseIndex) => (
-            <View key={exercise.exerciseId} style={styles.exerciseCard}>
-              <View style={styles.exerciseHeader}>
-                <Text style={styles.exerciseName}>{exercise.exerciseName}</Text>
-                <TouchableOpacity
-                  onPress={() => handleExerciseMenuOpen(exerciseIndex)}
-                  disabled={isWorkoutCompleted}
-                  style={styles.exerciseMenuButton}
-                >
-                  <MaterialIcons name="more-vert" size={24} color="#999" />
-                </TouchableOpacity>
-              </View>
-              {exercise.sets.map((set, setIndex) => (
-                <View key={setIndex} style={styles.setRow}>
-                  <View style={[styles.setNumberContainer, set.completed && styles.setNumberContainerCompleted]}>
-                    <Text style={[styles.setNumber, set.completed && styles.setNumberCompleted]}>
-                      {setIndex + 1}
-                    </Text>
-                  </View>
-                  <TouchableOpacity
-                    onPress={() => handleSetMenuOpen(exerciseIndex, setIndex)}
-                    disabled={isWorkoutCompleted}
-                    style={styles.setMenuButton}
-                  >
-                    <MaterialIcons name="more-vert" size={20} color="#999" />
-                  </TouchableOpacity>
-                  <View style={styles.setInputs}>
-                    <View style={styles.inputGroup}>
-                      <Text style={styles.inputLabel}>Weight</Text>
-                      <TextInput
-                        style={[styles.input, set.completed && styles.inputCompleted]}
-                        value={set.weight.toString()}
-                        onChangeText={(text) => {
-                          const value = parseFloat(text) || 0;
-                          handleUpdateSet(exerciseIndex, setIndex, 'weight', value);
-                        }}
-                        keyboardType="numeric"
-                        editable={!isWorkoutCompleted}
-                        placeholder={set.lastSet?.weight.toString() || '0'}
-                      />
-                    </View>
-                    <View style={styles.inputGroup}>
-                      <Text style={styles.inputLabel}>Reps</Text>
-                      <TextInput
-                        style={[styles.input, set.completed && styles.inputCompleted]}
-                        value={set.reps.toString()}
-                        onChangeText={(text) => {
-                          const value = parseInt(text) || 0;
-                          handleUpdateSet(exerciseIndex, setIndex, 'reps', value);
-                        }}
-                        keyboardType="numeric"
-                        editable={!isWorkoutCompleted}
-                        placeholder={set.lastSet?.reps.toString() || '0'}
-                      />
-                    </View>
-                  </View>
-                  <TouchableOpacity
-                      style={[
-                        styles.completeButton,
-                        set.completed ? styles.completeButtonActive : styles.completeButtonInactive,
-                      ]}
-                      onPress={() => handleSetCompletion(exerciseIndex, setIndex, !set.completed)}
-                      disabled={isWorkoutCompleted}
-                    >
-                      <MaterialIcons
-                        name={set.completed ? 'check-circle' : 'radio-button-unchecked'}
-                        size={24}
-                        color={set.completed ? '#4CAF50' : '#666'}
-                      />
-                    </TouchableOpacity>
-                </View>
-            
-
-              ))}
-            </View>
+            <ExerciseTrackingCard
+              key={exercise.exerciseId}
+              exercise={exercise}
+              exerciseIndex={exerciseIndex}
+              workoutInstanceId={workoutInstanceId}
+              isWorkoutCompleted={isWorkoutCompleted}
+              totalExercises={exerciseTrackings.length}
+              workoutInstance={workoutInstance}
+              onUpdateSet={handleUpdateSet}
+              onSetCompletion={handleSetCompletion}
+              onAddSet={handleAddSet}
+              onRemoveExercise={handleRemoveExercise}
+              onReorderExercise={handleReorderExercise}
+              onRemoveSet={handleRemoveSet}
+            />
           ))
         )}
       </ScrollView>
@@ -622,93 +572,6 @@ export const WorkoutDetailScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
       )}
-
-      {/* Exercise Menu Modal */}
-      <Modal
-        visible={exerciseMenuVisible}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={handleExerciseMenuClose}
-      >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={handleExerciseMenuClose}
-        >
-          <View style={styles.menuContainer}>
-            {activeExerciseIndex !== null && (
-              <>
-                <TouchableOpacity
-                  style={[
-                    styles.menuItem,
-                    (activeExerciseIndex === 0 || isWorkoutCompleted) && styles.menuItemDisabled,
-                  ]}
-                  onPress={() => handleReorderExercise(activeExerciseIndex, 'up')}
-                  disabled={activeExerciseIndex === 0 || isWorkoutCompleted}
-                >
-                  <MaterialIcons name="arrow-upward" size={20} color="#fff" />
-                  <Text style={styles.menuItemText}>Move Up</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[
-                    styles.menuItem,
-                    (activeExerciseIndex === exerciseTrackings.length - 1 || isWorkoutCompleted) && styles.menuItemDisabled,
-                  ]}
-                  onPress={() => handleReorderExercise(activeExerciseIndex, 'down')}
-                  disabled={activeExerciseIndex === exerciseTrackings.length - 1 || isWorkoutCompleted}
-                >
-                  <MaterialIcons name="arrow-downward" size={20} color="#fff" />
-                  <Text style={styles.menuItemText}>Move Down</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.menuItem, isWorkoutCompleted && styles.menuItemDisabled]}
-                  onPress={() => handleAddSet(activeExerciseIndex)}
-                  disabled={isWorkoutCompleted}
-                >
-                  <MaterialIcons name="add" size={20} color="#fff" />
-                  <Text style={styles.menuItemText}>Add Set</Text>
-                </TouchableOpacity>
-
-                <View style={styles.menuDivider} />
-
-                <TouchableOpacity
-                  style={[styles.menuItem, styles.menuItemDanger]}
-                  onPress={() => handleRemoveExercise(activeExerciseIndex)}
-                >
-                  <MaterialIcons name="delete" size={20} color="#ff4444" />
-                  <Text style={[styles.menuItemText, styles.menuItemTextDanger]}>Delete Exercise</Text>
-                </TouchableOpacity>
-              </>
-            )}
-          </View>
-        </TouchableOpacity>
-      </Modal>
-
-      {/* Set Menu Modal */}
-      <Modal
-        visible={setMenuVisible}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={handleSetMenuClose}
-      >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={handleSetMenuClose}
-        >
-          <View style={styles.menuContainer}>
-            <TouchableOpacity
-              style={[styles.menuItem, styles.menuItemDanger]}
-              onPress={handleRemoveSet}
-            >
-              <MaterialIcons name="delete" size={20} color="#ff4444" />
-              <Text style={[styles.menuItemText, styles.menuItemTextDanger]}>Delete Set</Text>
-            </TouchableOpacity>
-          </View>
-        </TouchableOpacity>
-      </Modal>
 
       {/* Add Exercise Modal */}
       <Modal
@@ -965,7 +828,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingVertical: 16,
+    paddingVertical: 8,
   },
   emptyContainer: {
     padding: 40,
@@ -975,91 +838,6 @@ const styles = StyleSheet.create({
     color: '#999',
     fontSize: 16,
   },
-  exerciseCard: {
-    marginBottom: 24,
-  },
-  exerciseHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    marginBottom: 16,
-  },
-  exerciseName: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#fff',
-    flex: 1,
-  },
-  exerciseMenuButton: {
-    padding: 4,
-  },
-  setRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    marginBottom: 12,
-    gap: 12,
-    width: '100%',
-    paddingHorizontal: 16,
-  },
-  setNumberContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 2,
-    borderColor: '#666',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  setNumberContainerCompleted: {
-    borderColor: '#4CAF50',
-    backgroundColor: '#4CAF50',
-  },
-  setNumber: {
-    fontSize: 14,
-    color: '#999',
-    fontWeight: '600',
-  },
-  setNumberCompleted: {
-    color: '#fff',
-  },
-  setMenuButton: {
-    padding: 4,
-    paddingBottom: 12,
-  },
-  setInputs: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  inputGroup: {
-    flex: 1,
-  },
-  inputLabel: {
-    fontSize: 12,
-    color: '#999',
-    marginBottom: 4,
-  },
-  input: {
-    backgroundColor: '#333',
-    borderRadius: 8,
-    padding: 12,
-    color: '#fff',
-    fontSize: 16,
-    borderWidth: 1,
-    borderColor: '#444',
-  },
-  inputCompleted: {
-    backgroundColor: '#2a4a2a',
-    borderColor: '#4CAF50',
-  },
-  completeButton: {
-    paddingBottom: 12
-  },
-  completeButtonActive: {},
-  completeButtonInactive: {},
   footer: {
     padding: 16,
     borderTopWidth: 1,
@@ -1086,37 +864,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  menuContainer: {
-    backgroundColor: '#2a2a2a',
-    borderRadius: 12,
-    paddingVertical: 8,
-    minWidth: 200,
-    borderWidth: 1,
-    borderColor: '#444',
-  },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 12,
-  },
-  menuItemDisabled: {
-    opacity: 0.5,
-  },
-  menuItemDanger: {},
-  menuItemText: {
-    color: '#fff',
-    fontSize: 16,
-  },
-  menuItemTextDanger: {
-    color: '#ff4444',
-  },
-  menuDivider: {
-    height: 1,
-    backgroundColor: '#444',
-    marginVertical: 4,
   },
   addExerciseModalContainer: {
     backgroundColor: '#2a2a2a',

@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  ImageBackground,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -65,19 +66,21 @@ export const SignUpScreen: React.FC = () => {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    <ImageBackground
+      source={require('../../assets/images/auth-background.png')}
+      style={styles.backgroundImage}
+      resizeMode="cover"
     >
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <View style={styles.content}>
-          <Text style={styles.title}>Create Account</Text>
-          <Text style={styles.subtitle}>
-            Join us to start tracking your fitness journey
-          </Text>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.content}>
+            <Text style={styles.title}>Meso IQ</Text>
 
           {error ? (
             <View style={styles.errorContainer}>
@@ -85,7 +88,6 @@ export const SignUpScreen: React.FC = () => {
             </View>
           ) : null}
 
-          <View style={styles.form}>
             <View style={styles.inputContainer}>
               <Text style={styles.label}>Email Address</Text>
               <TextInput
@@ -164,7 +166,6 @@ export const SignUpScreen: React.FC = () => {
                 <Text style={styles.buttonText}>Create Account</Text>
               )}
             </TouchableOpacity>
-          </View>
 
           <View style={styles.footer}>
             <Text style={styles.footerText}>Already have an account? </Text>
@@ -178,13 +179,18 @@ export const SignUpScreen: React.FC = () => {
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
+    </ImageBackground>
   );
 };
 
 const styles = StyleSheet.create({
+  backgroundImage: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+  },
   container: {
     flex: 1,
-    backgroundColor: '#1a1a1a',
   },
   scrollContent: {
     flexGrow: 1,
@@ -195,20 +201,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   title: {
-    fontSize: 32,
+    fontSize: 42,
     fontWeight: 'bold',
     color: '#fff',
     textAlign: 'center',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#999',
-    textAlign: 'center',
-    marginBottom: 32,
+    marginBottom: 48,
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
   },
   errorContainer: {
-    backgroundColor: '#ff4444',
+    backgroundColor: 'rgba(255, 68, 68, 0.9)',
     padding: 12,
     borderRadius: 8,
     marginBottom: 20,
@@ -220,6 +223,11 @@ const styles = StyleSheet.create({
   },
   form: {
     marginBottom: 24,
+    backgroundColor: 'rgba(26, 26, 26, 0.7)',
+    borderRadius: 16,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
   inputContainer: {
     marginBottom: 20,
@@ -231,9 +239,9 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   input: {
-    backgroundColor: '#2a2a2a',
+    backgroundColor: 'rgba(42, 42, 42, 0.8)',
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: 'rgba(255, 255, 255, 0.15)',
     borderRadius: 8,
     padding: 14,
     fontSize: 16,
@@ -242,9 +250,9 @@ const styles = StyleSheet.create({
   passwordContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#2a2a2a',
+    backgroundColor: 'rgba(42, 42, 42, 0.8)',
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: 'rgba(255, 255, 255, 0.15)',
     borderRadius: 8,
   },
   passwordInput: {
@@ -266,6 +274,11 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
     marginTop: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
   },
   buttonDisabled: {
     opacity: 0.6,
@@ -279,9 +292,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
+    marginTop: 24,
   },
   footerText: {
-    color: '#999',
+    color: 'rgba(255, 255, 255, 0.8)',
     fontSize: 14,
   },
   linkText: {

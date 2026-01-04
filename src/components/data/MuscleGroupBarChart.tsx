@@ -1,8 +1,26 @@
-import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, Dimensions, ScrollView } from 'react-native';
-import { BarChart, LineChart } from 'react-native-chart-kit';
+import React, { useMemo, useRef, useEffect } from 'react';
+import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
+import { SvgChart, SVGRenderer } from '@wuba/react-native-echarts';
+import * as echarts from 'echarts/core';
+import { BarChart, LineChart } from 'echarts/charts';
+import {
+  TitleComponent,
+  TooltipComponent,
+  LegendComponent,
+  GridComponent,
+} from 'echarts/components';
 import { themeColors, borderRadius, spacing } from '../../theme/colors';
-import { processChartData, ChartDataPoint } from '../../utils/chartUtils';
+
+// Register echarts components
+echarts.use([
+  TitleComponent,
+  TooltipComponent,
+  LegendComponent,
+  GridComponent,
+  SVGRenderer,
+  BarChart,
+  LineChart,
+]);
 
 interface MuscleGroupBarChartProps {
   muscleGroup: string;
@@ -11,9 +29,7 @@ interface MuscleGroupBarChartProps {
   mode: 'volume' | 'sets';
 }
 
-const { width: screenWidth } = Dimensions.get('window');
-const CHART_WIDTH = screenWidth - spacing.lg * 2;
-const CHART_HEIGHT = 180;
+const CHART_HEIGHT = 400;
 
 export const MuscleGroupBarChart: React.FC<MuscleGroupBarChartProps> = ({
   muscleGroup,
@@ -21,103 +37,170 @@ export const MuscleGroupBarChart: React.FC<MuscleGroupBarChartProps> = ({
   setInstances,
   mode,
 }) => {
-  const chartData = useMemo<ChartDataPoint[]>(
-    () => processChartData(volumeInstances, setInstances),
-    [volumeInstances, setInstances]
-  );
+  const chartRef = useRef<any>(null);
+  const { width: screenWidth } = useWindowDimensions();
+  const chartWidth = screenWidth - spacing.md * 4; // Account for container padding
 
-  const { labels, data, avgData } = useMemo(() => {
-    if (chartData.length === 0) {
-      return { labels: [], data: [], avgData: [] };
-    }
+  const chartData = useMemo(() => {
+    const dataMap = new Map<string, { date: string; volume: number; sets: number }>();
 
-    const valueKey = mode === 'volume' ? 'volume' : 'sets';
-    const avgKey = mode === 'volume' ? 'volumeAvg' : 'setsAvg';
+    // Process Volume
+    volumeInstances.forEach(inst => {
+      const [id, data] = Object.entries(inst)[0] as [string, { volume: number; date: string }];
+      if (!dataMap.has(id)) {
+        dataMap.set(id, { date: data.date, volume: 0, sets: 0 });
+      }
+      dataMap.get(id)!.volume = data.volume;
+    });
 
-    // Limit to last 10 data points for readability
-    const limitedData = chartData.slice(-10);
+    // Process Sets
+    setInstances.forEach(inst => {
+      const [id, data] = Object.entries(inst)[0] as [string, { count: number; date: string }];
+      if (!dataMap.has(id)) {
+        dataMap.set(id, { date: data.date, volume: 0, sets: 0 });
+      }
+      dataMap.get(id)!.sets = data.count;
+    });
+
+    // Sort by date
+    const sortedData = Array.from(dataMap.entries())
+      .map(([id, data]) => ({ instanceId: id, ...data }))
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    // Calculate rolling averages (last 3)
+    return sortedData.map((item, index) => {
+      // Rolling Volume (last 3)
+      const startIdx = Math.max(0, index - 10);
+      const relevantWindow = sortedData.slice(startIdx, index + 1);
+      
+      const rollingVolume = relevantWindow.reduce((sum, curr) => sum + curr.volume, 0) / relevantWindow.length;
+      const rollingSets = relevantWindow.reduce((sum, curr) => sum + curr.sets, 0) / relevantWindow.length;
+
+      return {
+        ...item,
+        shortDate: new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        rollingVolume,
+        rollingSets
+      };
+    });
+  }, [volumeInstances, setInstances]);
+
+  const chartOption = useMemo(() => {
+    if (chartData.length === 0) return null;
+
+    const isVolume = mode === 'volume';
+    const barData = chartData.map(d => isVolume ? d.volume : d.sets);
+    const lineData = chartData.map(d => isVolume ? d.rollingVolume : d.rollingSets);
+    const barColor = isVolume ? themeColors.chart.volume : themeColors.chart.sets;
+    const lineColor = isVolume ? themeColors.chart.sets : themeColors.chart.volume;
+    const unit = isVolume ? 'lbs' : '';
 
     return {
-      labels: limitedData.map((point) => point.shortDate),
-      data: limitedData.map((point) => point[valueKey] || 0),
-      avgData: limitedData.map((point) => point[avgKey] || 0),
+      backgroundColor: 'transparent',
+      title: {
+        text: ''
+      },
+      tooltip: {
+        trigger: 'axis',
+        axisPointer: {
+          type: 'cross',
+          label: {
+            backgroundColor: '#6a7985'
+          }
+        }
+      },
+      legend: {
+        data: ['Daily', 'Rolling Avg'],
+        textStyle: {
+          color: themeColors.text.primary
+        },
+        itemGap: 20,
+        left: 'center',
+        bottom: 0
+      },
+      grid: {
+        left: '3%',
+        right: '4%',
+        bottom: '8%',
+        top: '5%',
+        containLabel: true
+      },
+      xAxis: [
+        {
+          type: 'category',
+          boundaryGap: true,
+          data: chartData.map(d => d.shortDate),
+          axisLabel: {
+            color: themeColors.text.primary
+          },
+          splitLine: {
+            show: false
+          }
+        }
+      ],
+      yAxis: [
+        {
+          type: 'value',
+          splitNumber: 5,
+          axisLabel: {
+            color: themeColors.text.primary,
+            formatter: `{value} ${unit}`
+          },
+          splitLine: {
+            show: false
+          }
+        }
+      ],
+      series: [
+        {
+          name: 'Daily',
+          type: 'bar',
+          data: barData,
+          itemStyle: {
+            color: barColor,
+            opacity: 0.6
+          }
+        },
+        {
+          name: 'Rolling Avg',
+          type: 'line',
+          smooth: true,
+          data: lineData,
+          itemStyle: {
+            color: lineColor
+          },
+          lineStyle: {
+            width: 3
+          }
+        }
+      ]
     };
   }, [chartData, mode]);
 
-  // Don't render if no data
-  if (data.length === 0) {
-    return null;
-  }
+  useEffect(() => {
+    let chart: any;
+    if (chartRef.current && chartOption) {
+      chart = echarts.init(chartRef.current, 'dark', {
+        renderer: 'svg',
+        width: chartWidth,
+        height: CHART_HEIGHT,
+      });
+      chart.setOption(chartOption);
+    }
+    return () => {
+      chart?.dispose();
+    };
+  }, [chartOption, chartWidth]);
 
-  const barColor = mode === 'volume' ? themeColors.primary.main : themeColors.accent.warning;
-  const lineColor = themeColors.accent.error;
-
-  const chartConfig = {
-    backgroundColor: 'transparent',
-    backgroundGradientFrom: themeColors.background.surface,
-    backgroundGradientTo: themeColors.background.surface,
-    decimalPlaces: 0,
-    color: () => barColor,
-    labelColor: () => themeColors.text.secondary,
-    style: {
-      borderRadius: borderRadius.lg,
-    },
-    propsForBackgroundLines: {
-      stroke: themeColors.border.default,
-      strokeDasharray: '4,4',
-    },
-    barPercentage: 0.6,
-  };
-
-  const barChartData = {
-    labels: labels.map((l, i) => (i % 2 === 0 ? l : '')), // Show every other label
-    datasets: [
-      {
-        data: data,
-      },
-    ],
-  };
+  if (chartData.length === 0) return null;
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>{muscleGroup}</Text>
-        <Text style={styles.subtitle}>
-          {mode === 'volume' ? 'Volume (lbs)' : 'Sets'}
-        </Text>
       </View>
-
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        <BarChart
-          data={barChartData}
-          width={Math.max(CHART_WIDTH, data.length * 40)}
-          height={CHART_HEIGHT}
-          chartConfig={chartConfig}
-          style={styles.chart}
-          fromZero
-          showValuesOnTopOfBars={data.length <= 7}
-          withInnerLines
-          yAxisLabel=""
-          yAxisSuffix=""
-        />
-      </ScrollView>
-
-      {/* Legend */}
-      <View style={styles.legendContainer}>
-        <View style={styles.legendItem}>
-          <View style={[styles.legendColor, { backgroundColor: barColor }]} />
-          <Text style={styles.legendText}>
-            {mode === 'volume' ? 'Volume' : 'Sets'}
-          </Text>
-        </View>
-        <View style={styles.statsContainer}>
-          <Text style={styles.statsText}>
-            Avg: {Math.round(avgData.reduce((a, b) => a + b, 0) / avgData.length || 0)}
-          </Text>
-          <Text style={styles.statsText}>
-            Max: {Math.max(...data)}
-          </Text>
-        </View>
+      <View style={styles.chartContainer}>
+        <SvgChart ref={chartRef} />
       </View>
     </View>
   );
@@ -125,12 +208,19 @@ export const MuscleGroupBarChart: React.FC<MuscleGroupBarChartProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: themeColors.background.surface,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    borderColor: themeColors.border.default,
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
+    borderRadius: borderRadius.sm,
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 12,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 25,
+    elevation: 8,
   },
   header: {
     paddingHorizontal: spacing.md,
@@ -138,46 +228,14 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xs,
   },
   title: {
-    color: themeColors.text.primary,
-    fontSize: 16,
+    color: 'white',
+    fontSize: 18,
     fontWeight: '700',
   },
-  subtitle: {
-    color: themeColors.text.secondary,
-    fontSize: 12,
-    marginTop: 2,
-  },
-  chart: {
-    marginVertical: spacing.sm,
-    borderRadius: borderRadius.lg,
-  },
-  legendContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
+  chartContainer: {
+    width: '100%',
+    height: CHART_HEIGHT,
+    paddingHorizontal: spacing.sm,
     paddingBottom: spacing.md,
-  },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  legendColor: {
-    width: 12,
-    height: 12,
-    borderRadius: 2,
-  },
-  legendText: {
-    color: themeColors.text.secondary,
-    fontSize: 11,
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    gap: spacing.md,
-  },
-  statsText: {
-    color: themeColors.text.muted,
-    fontSize: 11,
   },
 });

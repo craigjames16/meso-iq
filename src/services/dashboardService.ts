@@ -1,5 +1,7 @@
 import { apiClient } from '../api/client';
 import { API_ENDPOINTS } from '../config/env';
+import { MesocycleProgressData } from '../types/mesocycle';
+import { ExerciseStats } from '../types/exercise';
 
 export interface Mesocycle {
   id: number;
@@ -71,6 +73,27 @@ export const dashboardService = {
     ]);
     
     return { volumeData, setData };
+  },
+
+  async getMesocycleProgress(mesocycleId: number): Promise<MesocycleProgressData> {
+    try {
+      const endpoint = API_ENDPOINTS.DASHBOARD.MESOCYCLE_PROGRESS(mesocycleId);
+      const response = await apiClient.get<MesocycleProgressData>(endpoint);
+      return response;
+    } catch (error: any) {
+      console.error('Error fetching mesocycle progress:', error);
+      throw new Error(error.message || 'Failed to fetch mesocycle progress');
+    }
+  },
+
+  async getExerciseStats(): Promise<ExerciseStats> {
+    try {
+      const response = await apiClient.get<ExerciseStats>(API_ENDPOINTS.DASHBOARD.EXERCISE_STATS);
+      return response;
+    } catch (error: any) {
+      console.error('Error fetching exercise stats:', error);
+      throw new Error(error.message || 'Failed to fetch exercise stats');
+    }
   },
 };
 
