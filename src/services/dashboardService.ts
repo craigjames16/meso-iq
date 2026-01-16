@@ -1,7 +1,7 @@
 import { apiClient } from '../api/client';
 import { API_ENDPOINTS } from '../config/env';
 import { MesocycleProgressData } from '../types/mesocycle';
-import { ExerciseStats } from '../types/exercise';
+import { ExerciseStats, ExerciseDetail } from '../types/exercise';
 
 export interface Mesocycle {
   id: number;
@@ -93,6 +93,35 @@ export const dashboardService = {
     } catch (error: any) {
       console.error('Error fetching exercise stats:', error);
       throw new Error(error.message || 'Failed to fetch exercise stats');
+    }
+  },
+
+  async getExerciseDetail(exerciseId: number): Promise<ExerciseDetail> {
+    try {
+      const response = await apiClient.get<ExerciseDetail>(API_ENDPOINTS.EXERCISES.GET(exerciseId));
+      return response;
+    } catch (error: any) {
+      console.error('Error fetching exercise detail:', error);
+      throw new Error(error.message || 'Failed to fetch exercise detail');
+    }
+  },
+
+  async updateExercise(exerciseId: number, data: { name?: string; category?: string }): Promise<any> {
+    try {
+      const response = await apiClient.put<any>(API_ENDPOINTS.EXERCISES.UPDATE(exerciseId), data);
+      return response;
+    } catch (error: any) {
+      console.error('Error updating exercise:', error);
+      throw new Error(error.message || 'Failed to update exercise');
+    }
+  },
+
+  async deleteExercise(exerciseId: number): Promise<void> {
+    try {
+      await apiClient.delete(API_ENDPOINTS.EXERCISES.DELETE(exerciseId));
+    } catch (error: any) {
+      console.error('Error deleting exercise:', error);
+      throw new Error(error.message || 'Failed to delete exercise');
     }
   },
 };

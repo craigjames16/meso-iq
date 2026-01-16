@@ -27,3 +27,28 @@ export interface ExerciseStats {
   allExercises: ExerciseStat[];
 }
 
+export interface ExerciseSet {
+  weight: number;
+  reps: number;
+  setNumber: number;
+}
+
+export interface HistoryInstance {
+  workoutInstanceId: number;
+  volume: number;
+  completedAt: string | Date;
+  sets: ExerciseSet[];
+}
+
+export interface ExerciseDetail {
+  id: number;
+  name: string;
+  category: string;
+  prs: ExercisePRs;
+  totalSets: number;
+  totalVolume: number;
+  lastPerformed: string | null;
+  volumeProgression: ExerciseVolumePoint[];
+  history: HistoryInstance[];
+}
+

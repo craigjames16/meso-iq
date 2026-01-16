@@ -9,7 +9,7 @@
 /* Begin PBXBuildFile section */
 		0C80B921A6F3F58F76C31292 /* libPods-MesoIQ.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 5DCACB8F33CDC322A6C60F78 /* libPods-MesoIQ.a */; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
-		70720A712F05D58400FF7AB1 /* ios_app_icon.icon in Resources */ = {isa = PBXBuildFile; fileRef = 70720A702F05D58400FF7AB1 /* ios_app_icon.icon */; };
+		70BB95C92F18669900500ADA /* ios_app_icon.icon in Resources */ = {isa = PBXBuildFile; fileRef = 70BB95C82F18669900500ADA /* ios_app_icon.icon */; };
 		761780ED2CA45674006654EE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761780EC2CA45674006654EE /* AppDelegate.swift */; };
 		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
 		A2E3E8C8D19F6753F22B9D1D /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */; };
@@ -23,7 +23,8 @@
 		3B4392A12AC88292D35C810B /* Pods-MesoIQ.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-MesoIQ.debug.xcconfig"; path = "Target Support Files/Pods-MesoIQ/Pods-MesoIQ.debug.xcconfig"; sourceTree = "<group>"; };
 		5709B34CF0A7D63546082F79 /* Pods-MesoIQ.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-MesoIQ.release.xcconfig"; path = "Target Support Files/Pods-MesoIQ/Pods-MesoIQ.release.xcconfig"; sourceTree = "<group>"; };
 		5DCACB8F33CDC322A6C60F78 /* libPods-MesoIQ.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-MesoIQ.a"; sourceTree = BUILT_PRODUCTS_DIR; };
-		70720A702F05D58400FF7AB1 /* ios_app_icon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = ios_app_icon.icon; sourceTree = "<group>"; };
+		7027FD5E2F12C813009AD2AC /* hermesvm.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = hermesvm.xcframework; path = "Pods/hermes-engine/destroot/Library/Frameworks/universal/hermesvm.xcframework"; sourceTree = "<group>"; };
+		70BB95C82F18669900500ADA /* ios_app_icon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = ios_app_icon.icon; sourceTree = "<group>"; };
 		761780EC2CA45674006654EE /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = MesoIQ/AppDelegate.swift; sourceTree = "<group>"; };
 		81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = MesoIQ/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
@@ -49,7 +50,7 @@
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */,
 				13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */,
-				70720A702F05D58400FF7AB1 /* ios_app_icon.icon */,
+				70BB95C82F18669900500ADA /* ios_app_icon.icon */,
 			);
 			name = MesoIQ;
 			sourceTree = "<group>";
@@ -57,6 +58,7 @@
 		2D16E6871FA4F8E400B85C8A /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				7027FD5E2F12C813009AD2AC /* hermesvm.xcframework */,
 				ED297162215061F000B7C4FE /* JavaScriptCore.framework */,
 				5DCACB8F33CDC322A6C60F78 /* libPods-MesoIQ.a */,
 			);
@@ -113,6 +115,7 @@
 				13B07F8C1A680F5B00A75B9A /* Frameworks */,
 				13B07F8E1A680F5B00A75B9A /* Resources */,
 				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
+				7027FD5D2F12C69B009AD2AC /* Hermes dSYM */,
 				00EEFC60759A1932668264C0 /* [CP] Embed Pods Frameworks */,
 				E235C05ADACE081382539298 /* [CP] Copy Pods Resources */,
 			);
@@ -164,7 +167,7 @@
 				81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */,
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
 				A2E3E8C8D19F6753F22B9D1D /* PrivacyInfo.xcprivacy in Resources */,
-				70720A712F05D58400FF7AB1 /* ios_app_icon.icon in Resources */,
+				70BB95C92F18669900500ADA /* ios_app_icon.icon in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -195,14 +198,37 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-MesoIQ/Pods-MesoIQ-frameworks-${CONFIGURATION}-input-files.xcfilelist",
 			);
+			inputPaths = (
+			);
 			name = "[CP] Embed Pods Frameworks";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-MesoIQ/Pods-MesoIQ-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-MesoIQ/Pods-MesoIQ-frameworks.sh\"\n";
 			showEnvVarsInLog = 0;
+		};
+		7027FD5D2F12C69B009AD2AC /* Hermes dSYM */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Hermes dSYM";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "#!/bin/bash\nset -e\n\nif [[ \"$CONFIGURATION\" == \"Release\" ]]; then\n  DEST=\"${DWARF_DSYM_FOLDER_PATH}\"\n  \n  # Find and copy all Hermes dSYMs\n  for dsym in $(find \"${PODS_ROOT}\" -name \"*.dSYM\" 2>/dev/null | grep -i hermes || true); do\n    echo \"Copying Hermes dSYM: $dsym\"\n    cp -R \"$dsym\" \"$DEST/\" 2>/dev/null || true\n  done\n  \n  # Also check the xcframework location\n  HERMES_XCFRAMEWORK=\"${PODS_ROOT}/hermes-engine/destroot/Library/Frameworks/universal/hermes.xcframework\"\n  if [[ -d \"$HERMES_XCFRAMEWORK\" ]]; then\n    find \"$HERMES_XCFRAMEWORK\" -name \"*.dSYM\" -exec cp -R {} \"$DEST/\" \\; 2>/dev/null || true\n  fi\nfi\n\nexit 0\n";
 		};
 		C38B50BA6285516D6DCD4F65 /* [CP] Check Pods Manifest.lock */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -234,9 +260,13 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-MesoIQ/Pods-MesoIQ-resources-${CONFIGURATION}-input-files.xcfilelist",
 			);
+			inputPaths = (
+			);
 			name = "[CP] Copy Pods Resources";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-MesoIQ/Pods-MesoIQ-resources-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -264,10 +294,12 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = ios_app_icon;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CLANG_ENABLE_MODULES = YES;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 6HS5W9NU5Y;
+				CURRENT_PROJECT_VERSION = 5;
+				DEVELOPMENT_TEAM = 453L6ZB52C;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = MesoIQ/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = MesoIQ;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
 				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -279,7 +311,7 @@
 					"-ObjC",
 					"-lc++",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "com.meso-iq.MesoIQNative";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.meso-iq.meso-iq-tracker";
 				PRODUCT_NAME = MesoIQ;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
@@ -294,9 +326,11 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = ios_app_icon;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CLANG_ENABLE_MODULES = YES;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 6HS5W9NU5Y;
+				CURRENT_PROJECT_VERSION = 5;
+				DEVELOPMENT_TEAM = 453L6ZB52C;
 				INFOPLIST_FILE = MesoIQ/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = MesoIQ;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
 				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -308,7 +342,7 @@
 					"-ObjC",
 					"-lc++",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "com.meso-iq.MesoIQNative";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.meso-iq.meso-iq-tracker";
 				PRODUCT_NAME = MesoIQ;
 				SWIFT_VERSION = 5.0;
 				VERSIONING_SYSTEM = "apple-generic";

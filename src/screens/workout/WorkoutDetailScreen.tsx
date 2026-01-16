@@ -17,6 +17,7 @@ import { workoutService } from '../../services/workoutService';
 import type { RootStackParamList } from '../../navigation/AppNavigator';
 import { ExerciseTrackingCard, type ExerciseTracking, type ExerciseSet } from '../../components/ExerciseTrackingCard';
 import type { HistoryInstance } from '../../components/ExerciseHistoryModal';
+import { BottomDrawer } from '../../components/BottomDrawer';
 
 type WorkoutDetailScreenRouteProp = RouteProp<RootStackParamList, 'WorkoutDetail'>;
 type WorkoutDetailScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'WorkoutDetail'>;
@@ -51,10 +52,6 @@ export const WorkoutDetailScreen: React.FC = () => {
       ]);
 
       setWorkoutInstance(workoutData);
-
-      // Process exercises data - it comes grouped by category with workoutInstances (history)
-      console.log('Exercises data received:', JSON.stringify(exercisesData, null, 2));
-      console.log('Exercises data type:', typeof exercisesData, Array.isArray(exercisesData));
       
       let exercisesArray: any[] = [];
       
@@ -102,7 +99,10 @@ export const WorkoutDetailScreen: React.FC = () => {
         let sets: ExerciseSet[];
 
         if (workoutData.completedAt) {
-          sets = completedSetsMap[workoutExercise.exercise.id] || [];
+          sets = (completedSetsMap[workoutExercise.exercise.id] || []).map((set: any) => ({
+            ...set,
+            completed: true,
+          }));
         } else {
           const numSets = workoutExercise.lastSets?.length || 3;
           sets = Array.from({ length: numSets }, (_, index) => {
@@ -574,86 +574,71 @@ export const WorkoutDetailScreen: React.FC = () => {
       )}
 
       {/* Add Exercise Modal */}
-      <Modal
+      <BottomDrawer
         visible={addExerciseModalVisible}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setAddExerciseModalVisible(false)}
+        onClose={() => {
+          setAddExerciseModalVisible(false);
+          setSelectedExercise('');
+          setSelectedCategory('ALL');
+        }}
+        title="Add Exercise"
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.addExerciseModalContainer}>
-            <View style={styles.addExerciseModalHeader}>
-              <Text style={styles.addExerciseModalTitle}>Add Exercise</Text>
-              <TouchableOpacity
-                onPress={() => {
-                  setAddExerciseModalVisible(false);
-                  setSelectedExercise('');
-                  setSelectedCategory('ALL');
-                }}
-                style={styles.closeButton}
-              >
-                <MaterialIcons name="close" size={24} color="#fff" />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.addExerciseModalContent}>
-              <View style={styles.pickerContainer}>
-                <Text style={styles.pickerLabel}>Category</Text>
-                <TouchableOpacity
-                  style={styles.pickerWrapper}
-                  onPress={() => setCategoryPickerVisible(true)}
-                >
-                  <Text style={styles.pickerText}>
-                    {selectedCategory === 'ALL'
-                      ? 'All Categories'
-                      : selectedCategory.charAt(0) + selectedCategory.slice(1).toLowerCase()}
-                  </Text>
-                  <MaterialIcons name="arrow-drop-down" size={24} color="#999" />
-                </TouchableOpacity>
-              </View>
-
-              <View style={styles.pickerContainer}>
-                <Text style={styles.pickerLabel}>Exercise</Text>
-                <TouchableOpacity
-                  style={[
-                    styles.pickerWrapper,
-                    getFilteredExercises().length === 0 && styles.pickerWrapperDisabled,
-                  ]}
-                  onPress={() => {
-                    if (getFilteredExercises().length > 0) {
-                      setExercisePickerVisible(true);
-                    } else {
-                      Alert.alert('No Exercises', 'No exercises available for the selected category.');
-                    }
-                  }}
-                  disabled={getFilteredExercises().length === 0}
-                >
-                  <Text style={[styles.pickerText, !selectedExercise && styles.pickerTextPlaceholder]}>
-                    {selectedExercise
-                      ? getFilteredExercises().find((ex) => ex.id.toString() === selectedExercise)?.name ||
-                        'Select an exercise'
-                      : getFilteredExercises().length === 0
-                      ? 'No exercises available'
-                      : 'Select an exercise'}
-                  </Text>
-                  <MaterialIcons name="arrow-drop-down" size={24} color="#999" />
-                </TouchableOpacity>
-              </View>
-
-              <TouchableOpacity
-                style={[
-                  styles.addExerciseButtonModal,
-                  (!selectedExercise || isWorkoutCompleted) && styles.addExerciseButtonModalDisabled,
-                ]}
-                onPress={handleAddExercise}
-                disabled={!selectedExercise || isWorkoutCompleted}
-              >
-                <Text style={styles.addExerciseButtonText}>Add Exercise</Text>
-              </TouchableOpacity>
-            </View>
+        <View style={styles.addExerciseModalContent}>
+          <View style={styles.pickerContainer}>
+            <Text style={styles.pickerLabel}>Category</Text>
+            <TouchableOpacity
+              style={styles.pickerWrapper}
+              onPress={() => setCategoryPickerVisible(true)}
+            >
+              <Text style={styles.pickerText}>
+                {selectedCategory === 'ALL'
+                  ? 'All Categories'
+                  : selectedCategory.charAt(0) + selectedCategory.slice(1).toLowerCase()}
+              </Text>
+              <MaterialIcons name="arrow-drop-down" size={24} color="#999" />
+            </TouchableOpacity>
           </View>
+
+          <View style={styles.pickerContainer}>
+            <Text style={styles.pickerLabel}>Exercise</Text>
+            <TouchableOpacity
+              style={[
+                styles.pickerWrapper,
+                getFilteredExercises().length === 0 && styles.pickerWrapperDisabled,
+              ]}
+              onPress={() => {
+                if (getFilteredExercises().length > 0) {
+                  setExercisePickerVisible(true);
+                } else {
+                  Alert.alert('No Exercises', 'No exercises available for the selected category.');
+                }
+              }}
+              disabled={getFilteredExercises().length === 0}
+            >
+              <Text style={[styles.pickerText, !selectedExercise && styles.pickerTextPlaceholder]}>
+                {selectedExercise
+                  ? getFilteredExercises().find((ex) => ex.id.toString() === selectedExercise)?.name ||
+                    'Select an exercise'
+                  : getFilteredExercises().length === 0
+                  ? 'No exercises available'
+                  : 'Select an exercise'}
+              </Text>
+              <MaterialIcons name="arrow-drop-down" size={24} color="#999" />
+            </TouchableOpacity>
+          </View>
+
+          <TouchableOpacity
+            style={[
+              styles.addExerciseButtonModal,
+              (!selectedExercise || isWorkoutCompleted) && styles.addExerciseButtonModalDisabled,
+            ]}
+            onPress={handleAddExercise}
+            disabled={!selectedExercise || isWorkoutCompleted}
+          >
+            <Text style={styles.addExerciseButtonText}>Add Exercise</Text>
+          </TouchableOpacity>
         </View>
-      </Modal>
+      </BottomDrawer>
 
       {/* Category Picker Modal */}
       <Modal

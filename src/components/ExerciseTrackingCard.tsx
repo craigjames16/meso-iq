@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,11 +6,15 @@ import {
   TouchableOpacity,
   TextInput,
   Alert,
-  Modal,
+  Animated,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../navigation/AppNavigator';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { workoutService } from '../services/workoutService';
 import { ExerciseHistoryModal, HistoryInstance } from './ExerciseHistoryModal';
+import { BottomDrawer } from './BottomDrawer';
 import { themeColors, spacing, borderRadius } from '../theme/colors';
 
 export interface ExerciseSet {
@@ -51,6 +55,128 @@ interface ExerciseTrackingCardProps {
   onShowHistory?: (exercise: ExerciseTracking) => void;
 }
 
+// Animated wrapper for set row background
+const AnimatedSetRowBackground: React.FC<{
+  completed: boolean;
+  children: React.ReactNode;
+  style: any;
+}> = ({ completed, children, style }) => {
+  const fadeAnim = useRef(new Animated.Value(completed ? 1 : 0)).current;
+
+  useEffect(() => {
+    Animated.timing(fadeAnim, {
+      toValue: completed ? 1 : 0,
+      duration: 300,
+      useNativeDriver: false,
+    }).start();
+  }, [completed, fadeAnim]);
+
+  const backgroundColor = fadeAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['transparent', 'rgba(76, 175, 80, 0.15)'],
+  });
+
+  const borderLeftColor = fadeAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['transparent', '#4CAF50'],
+  });
+
+  return (
+    <Animated.View
+      style={[
+        style,
+        {
+          backgroundColor,
+          borderLeftWidth: 3,
+          borderLeftColor,
+        },
+      ]}
+    >
+      {children}
+    </Animated.View>
+  );
+};
+
+// Animated input wrapper for fade effect on completion
+const AnimatedInput: React.FC<{
+  completed: boolean;
+  style: any;
+  value: string;
+  onChangeText: (text: string) => void;
+  keyboardType: 'numeric';
+  editable: boolean;
+  placeholder: string;
+  placeholderTextColor: string;
+}> = ({ completed, style, ...props }) => {
+  const fadeAnim = useRef(new Animated.Value(completed ? 1 : 0)).current;
+
+  useEffect(() => {
+    Animated.timing(fadeAnim, {
+      toValue: completed ? 1 : 0,
+      duration: 300,
+      useNativeDriver: false,
+    }).start();
+  }, [completed, fadeAnim]);
+
+  const backgroundColor = fadeAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['#333', '#2a4a2a'],
+  });
+
+  const borderColor = fadeAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['#444', '#4CAF50'],
+  });
+
+  return (
+    <Animated.View style={[style, { backgroundColor, borderColor }]}>
+      <TextInput
+        style={styles.inputInner}
+        {...props}
+      />
+    </Animated.View>
+  );
+};
+
+// Animated set number for fade effect on completion
+const AnimatedSetNumber: React.FC<{
+  completed: boolean;
+  setNumber: number;
+}> = ({ completed, setNumber }) => {
+  const fadeAnim = useRef(new Animated.Value(completed ? 1 : 0)).current;
+
+  useEffect(() => {
+    Animated.timing(fadeAnim, {
+      toValue: completed ? 1 : 0,
+      duration: 300,
+      useNativeDriver: false,
+    }).start();
+  }, [completed, fadeAnim]);
+
+  const backgroundColor = fadeAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['transparent', '#4CAF50'],
+  });
+
+  const borderColor = fadeAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['#666', '#4CAF50'],
+  });
+
+  const textColor = fadeAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['#999', '#fff'],
+  });
+
+  return (
+    <Animated.View style={[styles.setNumberContainer, { backgroundColor, borderColor }]}>
+      <Animated.Text style={[styles.setNumber, { color: textColor }]}>
+        {setNumber}
+      </Animated.Text>
+    </Animated.View>
+  );
+};
+
 export const ExerciseTrackingCard: React.FC<ExerciseTrackingCardProps> = ({
   exercise,
   exerciseIndex,
@@ -70,6 +196,11 @@ export const ExerciseTrackingCard: React.FC<ExerciseTrackingCardProps> = ({
   const [setMenuVisible, setSetMenuVisible] = useState(false);
   const [activeSetIndex, setActiveSetIndex] = useState<number | null>(null);
   const [historyModalVisible, setHistoryModalVisible] = useState(false);
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+
+  const handleExerciseNamePress = () => {
+    navigation.navigate('ExerciseDetail', { exerciseId: exercise.exerciseId });
+  };
 
   // Calculate last volume from mesocycle history
   const getLastVolume = () => {
@@ -156,7 +287,7 @@ export const ExerciseTrackingCard: React.FC<ExerciseTrackingCardProps> = ({
             {/* Action Buttons */}
             <View style={styles.headerButtons}>
               <TouchableOpacity
-                onPress={() => setHistoryModalVisible(true)}
+                onPress={handleExerciseNamePress}
                 style={styles.historyButton}
               >
                 <MaterialIcons name="info-outline" size={20} color="#999" />
@@ -172,12 +303,8 @@ export const ExerciseTrackingCard: React.FC<ExerciseTrackingCardProps> = ({
           </View>
         </View>
         {exercise.sets.map((set, setIndex) => (
-          <View key={setIndex} style={styles.setRow}>
-            <View style={[styles.setNumberContainer, set.completed && styles.setNumberContainerCompleted]}>
-              <Text style={[styles.setNumber, set.completed && styles.setNumberCompleted]}>
-                {setIndex + 1}
-              </Text>
-            </View>
+          <AnimatedSetRowBackground key={setIndex} completed={!!set.completed} style={styles.setRow}>
+            <AnimatedSetNumber completed={!!set.completed} setNumber={setIndex + 1} />
             <TouchableOpacity
               onPress={() => handleSetMenuOpen(setIndex)}
               disabled={isWorkoutCompleted}
@@ -189,10 +316,10 @@ export const ExerciseTrackingCard: React.FC<ExerciseTrackingCardProps> = ({
               <View style={styles.inputGroup}>
                 <View style={styles.inputLabelContainer}>
                   <Text style={styles.inputLabel}>Weight</Text>
-                  
                 </View>
-                <TextInput
-                  style={[styles.input, set.completed && styles.inputCompleted]}
+                <AnimatedInput
+                  completed={!!set.completed}
+                  style={styles.input}
                   value={set.weight > 0 ? set.weight.toString() : ''}
                   onChangeText={(text) => {
                     const value = parseFloat(text) || 0;
@@ -203,14 +330,17 @@ export const ExerciseTrackingCard: React.FC<ExerciseTrackingCardProps> = ({
                   placeholder={set.lastSet?.weight.toString() || '0'}
                   placeholderTextColor="#666"
                 />
+                <Text style={styles.lastSetHint}>
+                  Last: {set.lastSet?.weight ?? '-'}
+                </Text>
               </View>
               <View style={styles.inputGroup}>
                 <View style={styles.inputLabelContainer}>
                   <Text style={styles.inputLabel}>Reps</Text>
-                 
                 </View>
-                <TextInput
-                  style={[styles.input, set.completed && styles.inputCompleted]}
+                <AnimatedInput
+                  completed={!!set.completed}
+                  style={styles.input}
                   value={set.reps > 0 ? set.reps.toString() : ''}
                   onChangeText={(text) => {
                     const value = parseInt(text) || 0;
@@ -221,6 +351,9 @@ export const ExerciseTrackingCard: React.FC<ExerciseTrackingCardProps> = ({
                   placeholder={set.lastSet?.reps.toString() || '0'}
                   placeholderTextColor="#666"
                 />
+                <Text style={styles.lastSetHint}>
+                  Last: {set.lastSet?.reps ?? '-'}
+                </Text>
               </View>
             </View>
             <TouchableOpacity
@@ -231,98 +364,61 @@ export const ExerciseTrackingCard: React.FC<ExerciseTrackingCardProps> = ({
               onPress={() => onSetCompletion(exerciseIndex, setIndex, !set.completed)}
               disabled={isWorkoutCompleted}
             >
-              <MaterialIcons
-                name={set.completed ? 'check-circle' : 'radio-button-unchecked'}
-                size={24}
-                color={set.completed ? '#4CAF50' : '#666'}
-              />
+              {set.completed && (
+                <MaterialIcons name="check" size={18} color="#fff" />
+              )}
             </TouchableOpacity>
-          </View>
+          </AnimatedSetRowBackground>
         ))}
       </View>
 
-      {/* Exercise Menu Modal */}
-      <Modal
+      {/* Exercise Menu */}
+      <BottomDrawer
         visible={exerciseMenuVisible}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={handleExerciseMenuClose}
-      >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={handleExerciseMenuClose}
-        >
-          <View style={styles.menuContainer}>
-            <TouchableOpacity
-              style={[
-                styles.menuItem,
-                (exerciseIndex === 0 || isWorkoutCompleted) && styles.menuItemDisabled,
-              ]}
-              onPress={() => handleReorderExercise('up')}
-              disabled={exerciseIndex === 0 || isWorkoutCompleted}
-            >
-              <MaterialIcons name="arrow-upward" size={20} color="#fff" />
-              <Text style={styles.menuItemText}>Move Up</Text>
-            </TouchableOpacity>
+        onClose={handleExerciseMenuClose}
+        title={exercise.exerciseName}
+        items={[
+          {
+            label: 'Move Up',
+            icon: 'arrow-upward',
+            onPress: () => handleReorderExercise('up'),
+            disabled: exerciseIndex === 0 || isWorkoutCompleted,
+          },
+          {
+            label: 'Move Down',
+            icon: 'arrow-downward',
+            onPress: () => handleReorderExercise('down'),
+            disabled: exerciseIndex === totalExercises - 1 || isWorkoutCompleted,
+          },
+          {
+            label: 'Add Set',
+            icon: 'add',
+            onPress: handleAddSet,
+            disabled: isWorkoutCompleted,
+          },
+          {
+            label: 'Delete Exercise',
+            icon: 'delete',
+            onPress: handleRemoveExercise,
+            destructive: true,
+          },
+        ]}
+      />
 
-            <TouchableOpacity
-              style={[
-                styles.menuItem,
-                (exerciseIndex === totalExercises - 1 || isWorkoutCompleted) && styles.menuItemDisabled,
-              ]}
-              onPress={() => handleReorderExercise('down')}
-              disabled={exerciseIndex === totalExercises - 1 || isWorkoutCompleted}
-            >
-              <MaterialIcons name="arrow-downward" size={20} color="#fff" />
-              <Text style={styles.menuItemText}>Move Down</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.menuItem, isWorkoutCompleted && styles.menuItemDisabled]}
-              onPress={handleAddSet}
-              disabled={isWorkoutCompleted}
-            >
-              <MaterialIcons name="add" size={20} color="#fff" />
-              <Text style={styles.menuItemText}>Add Set</Text>
-            </TouchableOpacity>
-
-            <View style={styles.menuDivider} />
-
-            <TouchableOpacity
-              style={[styles.menuItem, styles.menuItemDanger]}
-              onPress={handleRemoveExercise}
-            >
-              <MaterialIcons name="delete" size={20} color="#ff4444" />
-              <Text style={[styles.menuItemText, styles.menuItemTextDanger]}>Delete Exercise</Text>
-            </TouchableOpacity>
-          </View>
-        </TouchableOpacity>
-      </Modal>
-
-      {/* Set Menu Modal */}
-      <Modal
+      {/* Set Menu */}
+      <BottomDrawer
         visible={setMenuVisible}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={handleSetMenuClose}
-      >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={handleSetMenuClose}
-        >
-          <View style={styles.menuContainer}>
-            <TouchableOpacity
-              style={[styles.menuItem, styles.menuItemDanger]}
-              onPress={handleRemoveSet}
-            >
-              <MaterialIcons name="delete" size={20} color="#ff4444" />
-              <Text style={[styles.menuItemText, styles.menuItemTextDanger]}>Delete Set</Text>
-            </TouchableOpacity>
-          </View>
-        </TouchableOpacity>
-      </Modal>
+        onClose={handleSetMenuClose}
+        title={`Set ${activeSetIndex !== null ? activeSetIndex + 1 : ''}`}
+        items={[
+          {
+            label: 'Delete Set',
+            icon: 'delete',
+            onPress: handleRemoveSet,
+            destructive: true,
+          },
+        ]}
+      />
 
       {/* Exercise History Modal */}
       <ExerciseHistoryModal
@@ -338,7 +434,7 @@ export const ExerciseTrackingCard: React.FC<ExerciseTrackingCardProps> = ({
 const styles = StyleSheet.create({
   exerciseCard: {
     marginBottom: spacing.sm,
-    marginHorizontal: spacing.sm,
+    marginHorizontal: spacing.xs,
     borderRadius: borderRadius.sm,
     paddingVertical: spacing.md,
     borderWidth: 1,
@@ -398,11 +494,18 @@ const styles = StyleSheet.create({
   },
   setRow: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
-    marginBottom: 12,
+    alignItems: 'center',
+    marginBottom: 6,
     gap: 12,
     width: '100%',
     paddingHorizontal: 16,
+    paddingVertical: 4,
+    borderRadius: borderRadius.sm,
+  },
+  setRowCompleted: {
+    backgroundColor: 'rgba(76, 175, 80, 0.15)',
+    borderLeftWidth: 3,
+    borderLeftColor: '#4CAF50',
   },
   setNumberContainer: {
     width: 32,
@@ -412,7 +515,6 @@ const styles = StyleSheet.create({
     borderColor: '#666',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 6,
   },
   setNumberContainerCompleted: {
     borderColor: '#4CAF50',
@@ -428,7 +530,6 @@ const styles = StyleSheet.create({
   },
   setMenuButton: {
     padding: 4,
-    paddingBottom: 12,
   },
   setInputs: {
     flex: 1,
@@ -451,63 +552,40 @@ const styles = StyleSheet.create({
   },
   lastSetHint: {
     fontSize: 11,
-    color: themeColors.primary.main,
+    color: themeColors.text.muted,
     fontWeight: '500',
+    marginTop: 4,
   },
   input: {
-    backgroundColor: '#333',
     borderRadius: 8,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  inputInner: {
     padding: 12,
     color: '#fff',
     fontSize: 16,
-    borderWidth: 1,
-    borderColor: '#444',
+    textAlign: 'center',
   },
   inputCompleted: {
     backgroundColor: '#2a4a2a',
     borderColor: '#4CAF50',
   },
   completeButton: {
-    paddingBottom: 12,
-  },
-  completeButtonActive: {},
-  completeButtonInactive: {},
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    width: 28,
+    height: 28,
+    borderRadius: borderRadius.sm,
+    borderWidth: 2,
+    borderColor: '#666',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  menuContainer: {
-    backgroundColor: '#2a2a2a',
-    borderRadius: 12,
-    paddingVertical: 8,
-    minWidth: 200,
-    borderWidth: 1,
-    borderColor: '#444',
+  completeButtonActive: {
+    backgroundColor: '#4CAF50',
+    borderColor: '#4CAF50',
   },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 12,
-  },
-  menuItemDisabled: {
-    opacity: 0.5,
-  },
-  menuItemDanger: {},
-  menuItemText: {
-    color: '#fff',
-    fontSize: 16,
-  },
-  menuItemTextDanger: {
-    color: '#ff4444',
-  },
-  menuDivider: {
-    height: 1,
-    backgroundColor: '#444',
-    marginVertical: 4,
+  completeButtonInactive: {
+    backgroundColor: 'transparent',
   },
 });
 

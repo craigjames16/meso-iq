@@ -1,32 +1,18 @@
 {
   "fill" : {
-    "automatic-gradient" : "display-p3:0.06347,0.20071,0.48261,1.00000",
-    "orientation" : {
-      "start" : {
-        "x" : 0.5,
-        "y" : 0
-      },
-      "stop" : {
-        "x" : 0.5,
-        "y" : 0.7
-      }
-    }
+    "solid" : "display-p3:0.05386,0.10454,0.20586,1.00000"
   },
   "groups" : [
     {
       "layers" : [
         {
-          "blend-mode" : "hard-light",
-          "fill" : "automatic",
-          "glass" : true,
-          "image-name" : "3d_beaker.png",
-          "name" : "3d_beaker",
-          "opacity" : 1,
+          "image-name" : "MIQ 3.png",
+          "name" : "MIQ 3",
           "position" : {
-            "scale" : 1,
+            "scale" : 0.8,
             "translation-in-points" : [
-              9.671875,
-              -12
+              0,
+              -9
             ]
           }
         }

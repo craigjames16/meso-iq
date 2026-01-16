@@ -16,7 +16,7 @@ import { mesocyclesService } from '../../services/mesocyclesService';
 import { plansService } from '../../services/plansService';
 import { MesocycleListItem, Plan } from '../../types/plan';
 import type { RootStackParamList } from '../../navigation/AppNavigator';
-import { StandardModal } from '../StandardModal';
+import { BottomDrawer } from '../BottomDrawer';
 
 type MesocyclesSectionNavigationProp = NativeStackNavigationProp<RootStackParamList, 'MesocycleDetail'>;
 
@@ -193,14 +193,13 @@ export const MesocyclesSection = forwardRef<MesocyclesSectionRef>((props, ref) =
         }
       />
 
-      {/* Create Mesocycle Modal */}
-      <StandardModal
+      {/* Create Mesocycle Drawer */}
+      <BottomDrawer
         visible={modalVisible}
         onClose={() => setModalVisible(false)}
         title="Create New Mesocycle"
-        scrollable={true}
       >
-        <View style={styles.modalBody}>
+        <View style={styles.drawerContent}>
           <Text style={styles.inputLabel}>Name</Text>
           <TextInput
             style={styles.textInput}
@@ -289,32 +288,32 @@ export const MesocyclesSection = forwardRef<MesocyclesSectionRef>((props, ref) =
               </TouchableOpacity>
             ))}
           </View>
-        </View>
 
-        <View style={styles.modalFooter}>
-          <TouchableOpacity
-            style={[styles.modalButton, styles.cancelButton]}
-            onPress={() => setModalVisible(false)}
-          >
-            <Text style={styles.cancelButtonText}>Cancel</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.modalButton,
-              styles.createButton,
-              (!newMesocycle.name.trim() || !newMesocycle.planId || newMesocycle.iterations < 1 || creating) && styles.createButtonDisabled,
-            ]}
-            onPress={handleCreateMesocycle}
-            disabled={!newMesocycle.name.trim() || !newMesocycle.planId || newMesocycle.iterations < 1 || creating}
-          >
-            {creating ? (
-              <ActivityIndicator size="small" color={themeColors.text.primary} />
-            ) : (
-              <Text style={styles.createButtonText}>Create</Text>
-            )}
-          </TouchableOpacity>
+          <View style={styles.drawerFooter}>
+            <TouchableOpacity
+              style={[styles.drawerButton, styles.cancelButton]}
+              onPress={() => setModalVisible(false)}
+            >
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.drawerButton,
+                styles.createButton,
+                (!newMesocycle.name.trim() || !newMesocycle.planId || newMesocycle.iterations < 1 || creating) && styles.createButtonDisabled,
+              ]}
+              onPress={handleCreateMesocycle}
+              disabled={!newMesocycle.name.trim() || !newMesocycle.planId || newMesocycle.iterations < 1 || creating}
+            >
+              {creating ? (
+                <ActivityIndicator size="small" color={themeColors.text.primary} />
+              ) : (
+                <Text style={styles.createButtonText}>Create</Text>
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
-      </StandardModal>
+      </BottomDrawer>
     </View>
   );
 });
@@ -449,7 +448,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
   },
-  modalBody: {
+  drawerContent: {
     padding: spacing.md,
   },
   inputLabel: {
@@ -557,16 +556,13 @@ const styles = StyleSheet.create({
   iterationBoxTextSelected: {
     color: themeColors.primary.main,
   },
-  modalFooter: {
+  drawerFooter: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: themeColors.border.default,
     gap: spacing.sm,
+    marginTop: spacing.md,
   },
-  modalButton: {
+  drawerButton: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderRadius: borderRadius.md,

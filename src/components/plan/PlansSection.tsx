@@ -5,7 +5,6 @@ import {
   StyleSheet,
   FlatList,
   TouchableOpacity,
-  Modal,
   TextInput,
   ActivityIndicator,
 } from 'react-native';
@@ -13,6 +12,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { themeColors, borderRadius, spacing } from '../../theme/colors';
+import { BottomDrawer } from '../BottomDrawer';
 import { plansService } from '../../services/plansService';
 import { Plan } from '../../types/plan';
 import type { RootStackParamList } from '../../navigation/AppNavigator';
@@ -154,75 +154,51 @@ export const PlansSection = forwardRef<PlansSectionRef>((props, ref) => {
         }
       />
 
-      {/* Create Plan Modal */}
-      <Modal
+      {/* Create Plan Drawer */}
+      <BottomDrawer
         visible={modalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setModalVisible(false)}
+        onClose={() => setModalVisible(false)}
+        title="Create New Plan"
       >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setModalVisible(false)}
-        >
-          <TouchableOpacity
-            style={styles.modalContent}
-            activeOpacity={1}
-            onPress={(e) => e.stopPropagation()}
-          >
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Create New Plan</Text>
-              <TouchableOpacity onPress={() => setModalVisible(false)}>
-                <MaterialIcons
-                  name="close"
-                  size={24}
-                  color={themeColors.text.secondary}
-                />
-              </TouchableOpacity>
-            </View>
+        <View style={styles.drawerContent}>
+          <Text style={styles.inputLabel}>Plan Name</Text>
+          <TextInput
+            style={styles.textInput}
+            value={newPlanName}
+            onChangeText={setNewPlanName}
+            placeholder="Enter plan name"
+            placeholderTextColor={themeColors.text.muted}
+            autoFocus
+          />
+          <Text style={styles.drawerNote}>
+            Note: Plan days can be configured later
+          </Text>
 
-            <View style={styles.modalBody}>
-              <Text style={styles.inputLabel}>Plan Name</Text>
-              <TextInput
-                style={styles.textInput}
-                value={newPlanName}
-                onChangeText={setNewPlanName}
-                placeholder="Enter plan name"
-                placeholderTextColor={themeColors.text.muted}
-                autoFocus
-              />
-              <Text style={styles.modalNote}>
-                Note: Plan days can be configured later
-              </Text>
-            </View>
-
-            <View style={styles.modalFooter}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => setModalVisible(false)}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.modalButton,
-                  styles.createButton,
-                  (!newPlanName.trim() || creating) && styles.createButtonDisabled,
-                ]}
-                onPress={handleCreatePlan}
-                disabled={!newPlanName.trim() || creating}
-              >
-                {creating ? (
-                  <ActivityIndicator size="small" color={themeColors.text.primary} />
-                ) : (
-                  <Text style={styles.createButtonText}>Create</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
+          <View style={styles.drawerFooter}>
+            <TouchableOpacity
+              style={[styles.drawerButton, styles.cancelButton]}
+              onPress={() => setModalVisible(false)}
+            >
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.drawerButton,
+                styles.createButton,
+                (!newPlanName.trim() || creating) && styles.createButtonDisabled,
+              ]}
+              onPress={handleCreatePlan}
+              disabled={!newPlanName.trim() || creating}
+            >
+              {creating ? (
+                <ActivityIndicator size="small" color={themeColors.text.primary} />
+              ) : (
+                <Text style={styles.createButtonText}>Create</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </BottomDrawer>
     </View>
   );
 });
@@ -336,36 +312,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
   },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: spacing.lg,
-  },
-  modalContent: {
-    backgroundColor: themeColors.background.primary,
-    borderRadius: borderRadius.lg,
-    width: '100%',
-    maxWidth: 400,
-    borderWidth: 1,
-    borderColor: themeColors.border.default,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: themeColors.border.default,
-  },
-  modalTitle: {
-    color: themeColors.text.primary,
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  modalBody: {
+  drawerContent: {
     padding: spacing.md,
   },
   inputLabel: {
@@ -385,21 +332,19 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginBottom: spacing.sm,
   },
-  modalNote: {
+  drawerNote: {
     color: themeColors.text.muted,
     fontSize: 12,
     fontStyle: 'italic',
+    marginBottom: spacing.md,
   },
-  modalFooter: {
+  drawerFooter: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: themeColors.border.default,
     gap: spacing.sm,
+    marginTop: spacing.sm,
   },
-  modalButton: {
+  drawerButton: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderRadius: borderRadius.md,

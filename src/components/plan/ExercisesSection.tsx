@@ -5,15 +5,18 @@ import {
   StyleSheet,
   FlatList,
   TouchableOpacity,
-  Modal,
   TextInput,
   ActivityIndicator,
   ScrollView,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { themeColors, borderRadius, spacing } from '../../theme/colors';
+import { BottomDrawer } from '../BottomDrawer';
 import { exercisesService } from '../../services/exercisesService';
 import { ExerciseListItem, ExercisesByCategory } from '../../types/plan';
+import type { RootStackParamList } from '../../navigation/AppNavigator';
 
 export interface ExercisesSectionRef {
   openCreateDialog: () => void;
@@ -25,6 +28,7 @@ type SortDirection = 'asc' | 'desc';
 const EXERCISE_CATEGORIES = ['BACK', 'BICEPS', 'TRICEPS', 'CHEST', 'SHOULDERS', 'HAMSTRINGS', 'QUADS', 'CALVES'];
 
 export const ExercisesSection = forwardRef<ExercisesSectionRef>((props, ref) => {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [exercises, setExercises] = useState<ExercisesByCategory>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -129,9 +133,7 @@ export const ExercisesSection = forwardRef<ExercisesSectionRef>((props, ref) => 
       <TouchableOpacity
         style={styles.exerciseRow}
         activeOpacity={0.7}
-        onPress={() => {
-          // Exercise history can be added later
-        }}
+        onPress={() => navigation.navigate('ExerciseDetail', { exerciseId: item.id })}
       >
         <View style={styles.exerciseRowContent}>
           <View style={styles.exerciseRowMain}>
@@ -144,18 +146,11 @@ export const ExercisesSection = forwardRef<ExercisesSectionRef>((props, ref) => 
             <Text style={styles.exerciseWeight}>
               {item.highestWeight > 0 ? `${item.highestWeight} lbs` : '-'}
             </Text>
-            <TouchableOpacity
-              onPress={() => {
-                // Show history modal can be added later
-              }}
-              style={styles.historyButton}
-            >
-              <MaterialIcons
-                name="bar-chart"
-                size={20}
-                color={themeColors.text.secondary}
-              />
-            </TouchableOpacity>
+            <MaterialIcons
+              name="chevron-right"
+              size={24}
+              color={themeColors.text.muted}
+            />
           </View>
         </View>
       </TouchableOpacity>
@@ -272,146 +267,74 @@ export const ExercisesSection = forwardRef<ExercisesSectionRef>((props, ref) => 
         }
       />
 
-      {/* Create Exercise Modal */}
-      <Modal
+      {/* Create Exercise Drawer */}
+      <BottomDrawer
         visible={modalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setModalVisible(false)}
+        onClose={() => setModalVisible(false)}
+        title="Create New Exercise"
       >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setModalVisible(false)}
-        >
+        <View style={styles.drawerContent}>
+          <Text style={styles.inputLabel}>Exercise Name</Text>
+          <TextInput
+            style={styles.textInput}
+            value={newExercise.name}
+            onChangeText={(text) => setNewExercise(prev => ({ ...prev, name: text }))}
+            placeholder="Enter exercise name"
+            placeholderTextColor={themeColors.text.muted}
+            autoFocus
+          />
+
+          <Text style={styles.inputLabel}>Category</Text>
           <TouchableOpacity
-            style={styles.modalContent}
-            activeOpacity={1}
-            onPress={(e) => e.stopPropagation()}
+            style={styles.pickerButton}
+            onPress={() => setCategoryPickerVisible(true)}
           >
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Create New Exercise</Text>
-              <TouchableOpacity onPress={() => setModalVisible(false)}>
-                <MaterialIcons
-                  name="close"
-                  size={24}
-                  color={themeColors.text.secondary}
-                />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.modalBody}>
-              <Text style={styles.inputLabel}>Exercise Name</Text>
-              <TextInput
-                style={styles.textInput}
-                value={newExercise.name}
-                onChangeText={(text) => setNewExercise(prev => ({ ...prev, name: text }))}
-                placeholder="Enter exercise name"
-                placeholderTextColor={themeColors.text.muted}
-                autoFocus
-              />
-
-              <Text style={styles.inputLabel}>Category</Text>
-              <TouchableOpacity
-                style={styles.pickerButton}
-                onPress={() => setCategoryPickerVisible(true)}
-              >
-                <Text style={newExercise.category ? styles.pickerButtonText : styles.pickerButtonPlaceholder}>
-                  {newExercise.category ? formatCategoryName(newExercise.category) : 'Select category'}
-                </Text>
-                <MaterialIcons
-                  name="keyboard-arrow-down"
-                  size={24}
-                  color={themeColors.text.secondary}
-                />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.modalFooter}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => setModalVisible(false)}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.modalButton,
-                  styles.createButton,
-                  (!newExercise.name.trim() || !newExercise.category || creating) && styles.createButtonDisabled,
-                ]}
-                onPress={handleCreateExercise}
-                disabled={!newExercise.name.trim() || !newExercise.category || creating}
-              >
-                {creating ? (
-                  <ActivityIndicator size="small" color={themeColors.text.primary} />
-                ) : (
-                  <Text style={styles.createButtonText}>Create</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
-
-      {/* Category Picker Modal */}
-      <Modal
-        visible={categoryPickerVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setCategoryPickerVisible(false)}
-      >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setCategoryPickerVisible(false)}
-        >
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Select Category</Text>
-              <TouchableOpacity onPress={() => setCategoryPickerVisible(false)}>
-                <MaterialIcons
-                  name="close"
-                  size={24}
-                  color={themeColors.text.secondary}
-                />
-              </TouchableOpacity>
-            </View>
-            <FlatList
-              data={EXERCISE_CATEGORIES}
-              keyExtractor={(item) => item}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={[
-                    styles.planOption,
-                    item === newExercise.category && styles.planOptionSelected,
-                  ]}
-                  onPress={() => {
-                    setNewExercise(prev => ({ ...prev, category: item }));
-                    setCategoryPickerVisible(false);
-                  }}
-                >
-                  <Text
-                    style={[
-                      styles.planOptionText,
-                      item === newExercise.category && styles.planOptionTextSelected,
-                    ]}
-                  >
-                    {formatCategoryName(item)}
-                  </Text>
-                  {item === newExercise.category && (
-                    <MaterialIcons
-                      name="check"
-                      size={20}
-                      color={themeColors.primary.main}
-                    />
-                  )}
-                </TouchableOpacity>
-              )}
+            <Text style={newExercise.category ? styles.pickerButtonText : styles.pickerButtonPlaceholder}>
+              {newExercise.category ? formatCategoryName(newExercise.category) : 'Select category'}
+            </Text>
+            <MaterialIcons
+              name="keyboard-arrow-down"
+              size={24}
+              color={themeColors.text.secondary}
             />
+          </TouchableOpacity>
+
+          <View style={styles.drawerFooter}>
+            <TouchableOpacity
+              style={[styles.drawerButton, styles.cancelButton]}
+              onPress={() => setModalVisible(false)}
+            >
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.drawerButton,
+                styles.createButton,
+                (!newExercise.name.trim() || !newExercise.category || creating) && styles.createButtonDisabled,
+              ]}
+              onPress={handleCreateExercise}
+              disabled={!newExercise.name.trim() || !newExercise.category || creating}
+            >
+              {creating ? (
+                <ActivityIndicator size="small" color={themeColors.text.primary} />
+              ) : (
+                <Text style={styles.createButtonText}>Create</Text>
+              )}
+            </TouchableOpacity>
           </View>
-        </TouchableOpacity>
-      </Modal>
+        </View>
+      </BottomDrawer>
+
+      {/* Category Picker Drawer */}
+      <BottomDrawer
+        visible={categoryPickerVisible}
+        onClose={() => setCategoryPickerVisible(false)}
+        title="Select Category"
+        items={EXERCISE_CATEGORIES.map(category => ({
+          label: formatCategoryName(category),
+          onPress: () => setNewExercise(prev => ({ ...prev, category })),
+        }))}
+      />
     </View>
   );
 });
@@ -515,9 +438,6 @@ const styles = StyleSheet.create({
     minWidth: 60,
     textAlign: 'right',
   },
-  historyButton: {
-    padding: spacing.xs,
-  },
   centerContent: {
     flex: 1,
     justifyContent: 'center',
@@ -564,36 +484,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
   },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: spacing.lg,
-  },
-  modalContent: {
-    backgroundColor: themeColors.background.primary,
-    borderRadius: borderRadius.lg,
-    width: '100%',
-    maxWidth: 400,
-    borderWidth: 1,
-    borderColor: themeColors.border.default,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: themeColors.border.default,
-  },
-  modalTitle: {
-    color: themeColors.text.primary,
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  modalBody: {
+  drawerContent: {
     padding: spacing.md,
   },
   inputLabel: {
@@ -624,7 +515,7 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.md,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    marginBottom: spacing.sm,
+    marginBottom: spacing.md,
   },
   pickerButtonText: {
     color: themeColors.text.primary,
@@ -634,16 +525,13 @@ const styles = StyleSheet.create({
     color: themeColors.text.muted,
     fontSize: 16,
   },
-  modalFooter: {
+  drawerFooter: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: themeColors.border.default,
     gap: spacing.sm,
+    marginTop: spacing.sm,
   },
-  modalButton: {
+  drawerButton: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderRadius: borderRadius.md,
@@ -670,27 +558,6 @@ const styles = StyleSheet.create({
   createButtonText: {
     color: themeColors.text.primary,
     fontSize: 14,
-    fontWeight: '600',
-  },
-  planOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: themeColors.border.default,
-  },
-  planOptionSelected: {
-    backgroundColor: 'rgba(136, 132, 216, 0.15)',
-  },
-  planOptionText: {
-    color: themeColors.text.primary,
-    fontSize: 15,
-    flex: 1,
-  },
-  planOptionTextSelected: {
-    color: themeColors.primary.main,
     fontWeight: '600',
   },
 });

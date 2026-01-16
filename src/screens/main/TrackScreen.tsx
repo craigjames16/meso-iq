@@ -11,10 +11,12 @@ import {
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { workoutService } from '../../services/workoutService';
 import { CurrentMesocycle, PlanInstanceDay } from '../../types/workout';
-import { useNavigation } from '@react-navigation/native';
-import { WorkoutHeatmap } from '../../components/WorkoutHeatmap';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { WorkoutCalendar } from '../../components/WorkoutCalendar';
-import { themeColors } from '../../theme/colors';
+import { WeekViewCards } from '../../components/WeekViewCards';
+import { ConsistencyCard } from '../../components/data/ConsistencyCard';
+import { LastWorkoutVolumeCard } from '../../components/data/LastWorkoutVolumeCard';
+import { themeColors, spacing } from '../../theme/colors';
 import type { CompositeNavigationProp } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -35,41 +37,52 @@ const NextWorkout: React.FC<{
   const [nextWorkout, setNextWorkout] = useState<PlanInstanceDay | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isStarting, setIsStarting] = useState(false);
 
-  useEffect(() => {
-    const fetchNextWorkout = async () => {
-      if (!currentMesocycle) {
-        setLoading(false);
-        return;
-      }
-      
-      try {
-        console.log('Fetching schedule for mesocycle:', currentMesocycle.id);
-        const data = await workoutService.getSchedule(currentMesocycle.id);
-        console.log('Schedule data received:', JSON.stringify(data.upcomingDays, null, 2));
+  // Refetch data whenever the screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      const fetchNextWorkout = async () => {
+        if (!currentMesocycle) {
+          setLoading(false);
+          return;
+        }
         
-        // Get the first upcoming day
-        const firstUpcomingDay = data.upcomingDays.length > 0 ? data.upcomingDays[0] : null;
-        setNextWorkout(firstUpcomingDay);
-      } catch (err) {
-        console.error('Error fetching schedule:', err);
-        const errorMessage = err instanceof Error ? err.message : 'An error occurred';
-        console.error('Error details:', {
-          message: errorMessage,
-          error: err,
-        });
-        setError(errorMessage);
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    fetchNextWorkout();
-  }, [currentMesocycle]);
+        // Reset states when screen comes into focus
+        setIsStarting(false);
+        setError(null);
+        setLoading(true);
+        
+        try {
+          console.log('Fetching schedule for mesocycle:', currentMesocycle.id);
+          const data = await workoutService.getSchedule(currentMesocycle.id);
+          console.log('Schedule data received:', JSON.stringify(data.upcomingDays, null, 2));
+          
+          // Get the first upcoming day
+          const firstUpcomingDay = data.upcomingDays.length > 0 ? data.upcomingDays[0] : null;
+          setNextWorkout(firstUpcomingDay);
+        } catch (err) {
+          console.error('Error fetching schedule:', err);
+          const errorMessage = err instanceof Error ? err.message : 'An error occurred';
+          console.error('Error details:', {
+            message: errorMessage,
+            error: err,
+          });
+          setError(errorMessage);
+        } finally {
+          setLoading(false);
+        }
+      };
+      
+      fetchNextWorkout();
+    }, [currentMesocycle])
+  );
 
   const handleStartWorkout = async () => {
     if (!nextWorkout) return;
 
+    setIsStarting(true);
+    
     // Check if we need to create a new iteration (day has placeholder id)
     if (nextWorkout.id === -1 || nextWorkout.planInstanceId === -1) {
       // Create a new iteration first
@@ -102,12 +115,14 @@ const NextWorkout: React.FC<{
         console.error('Error creating new iteration:', err);
         setError(err instanceof Error ? err.message : 'Failed to create new iteration');
         Alert.alert('Error', err instanceof Error ? err.message : 'Failed to create new iteration');
+        setIsStarting(false);
       }
     } else {
       // Start workout with existing iteration
       if (!nextWorkout.planInstanceId || !nextWorkout.id) {
         setError('Missing required workout information. Please try refreshing the page.');
         Alert.alert('Error', 'Missing required workout information. Please try refreshing the page.');
+        setIsStarting(false);
         return;
       }
       
@@ -120,10 +135,12 @@ const NextWorkout: React.FC<{
           const data = await workoutService.getSchedule(currentMesocycle?.id || 0);
           const firstUpcomingDay = data.upcomingDays.length > 0 ? data.upcomingDays[0] : null;
           setNextWorkout(firstUpcomingDay);
+          setIsStarting(false);
         } catch (err) {
           console.error('Error completing rest day:', err);
           setError(err instanceof Error ? err.message : 'Failed to complete rest day');
           Alert.alert('Error', err instanceof Error ? err.message : 'Failed to complete rest day');
+          setIsStarting(false);
         }
       } else {
         try {
@@ -136,10 +153,13 @@ const NextWorkout: React.FC<{
           console.error('Error starting workout:', err);
           setError(err instanceof Error ? err.message : 'Failed to start workout');
           Alert.alert('Error', err instanceof Error ? err.message : 'Failed to start workout');
+          setIsStarting(false);
         }
       }
     }
   };
+  
+  const isButtonLoading = isStarting || isStartingWorkout;
   
   if (loading) {
     return (
@@ -218,16 +238,20 @@ const NextWorkout: React.FC<{
           style={[
             styles.playButton,
             isRestDay ? styles.restButton : styles.workoutButton,
-            isStartingWorkout && styles.buttonDisabled
+            isButtonLoading && styles.buttonDisabled
           ]}
           onPress={handleStartWorkout}
-          disabled={isStartingWorkout}
+          disabled={isButtonLoading}
         >
-          <MaterialIcons 
-            name={isRestDay ? "check" : "play-arrow"} 
-            size={20} 
-            color={"#fff"} 
-          />
+          {isButtonLoading ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <MaterialIcons 
+              name={isRestDay ? "check" : "play-arrow"} 
+              size={20} 
+              color={"#fff"} 
+            />
+          )}
         </TouchableOpacity>
       </View>
     </View>
@@ -338,8 +362,12 @@ export const TrackScreen: React.FC = () => {
         isStartingWorkout={isStartingWorkout}
       />
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.contentContainer}>
+        <WeekViewCards mesocycleId={currentMesocycle?.id || null} />
+        <View style={styles.cardsGrid}>
+          <ConsistencyCard mesocycleId={currentMesocycle?.id || null} />
+          <LastWorkoutVolumeCard mesocycleId={currentMesocycle?.id || null} />
+        </View>
         <WorkoutCalendar mesocycleId={currentMesocycle?.id || null} />
-        <WorkoutHeatmap mesocycleId={currentMesocycle?.id || null} />
       </ScrollView>
     </View>
   );
@@ -354,7 +382,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   contentContainer: {
-    padding: 20,
+    padding: 8,
+  },
+  cardsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.md,
+    marginBottom: spacing.md,
   },
   header: {
     marginBottom: 20,

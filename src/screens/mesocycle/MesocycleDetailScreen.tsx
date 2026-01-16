@@ -7,7 +7,6 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
-  Modal,
 } from 'react-native';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -16,6 +15,7 @@ import { mesocyclesService } from '../../services/mesocyclesService';
 import { workoutService } from '../../services/workoutService';
 import type { RootStackParamList } from '../../navigation/AppNavigator';
 import { MesocycleDetail, PlanInstance, PlanInstanceDay } from '../../types/plan';
+import { BottomDrawer } from '../../components/BottomDrawer';
 import { themeColors, borderRadius, spacing } from '../../theme/colors';
 
 type MesocycleDetailScreenRouteProp = RouteProp<RootStackParamList, 'MesocycleDetail'>;
@@ -354,129 +354,86 @@ export const MesocycleDetailScreen: React.FC = () => {
         )}
       </ScrollView>
 
-      {/* Menu Modal */}
-      <Modal
+      {/* Menu Drawer */}
+      <BottomDrawer
         visible={menuVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setMenuVisible(false)}
+        onClose={() => setMenuVisible(false)}
+        title="Options"
+        items={[
+          ...(mesocycle.status !== 'COMPLETE'
+            ? [
+                {
+                  label: 'Complete Mesocycle',
+                  icon: 'stop-circle',
+                  onPress: () => setCompleteDialogVisible(true),
+                },
+              ]
+            : []),
+          {
+            label: 'Delete Mesocycle',
+            icon: 'delete',
+            onPress: () => setDeleteDialogVisible(true),
+            destructive: true,
+          },
+        ]}
+      />
+
+      {/* Delete Confirmation Drawer */}
+      <BottomDrawer
+        visible={deleteDialogVisible}
+        onClose={() => setDeleteDialogVisible(false)}
+        title="Delete Mesocycle"
       >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setMenuVisible(false)}
-        >
-          <View style={styles.menuContent}>
-            {mesocycle.status !== 'COMPLETE' && (
-              <TouchableOpacity
-                style={styles.menuItem}
-                onPress={() => {
-                  setMenuVisible(false);
-                  setCompleteDialogVisible(true);
-                }}
-              >
-                <MaterialIcons
-                  name="stop-circle"
-                  size={24}
-                  color={themeColors.accent.warning}
-                />
-                <Text style={[styles.menuItemText, styles.warningText]}>
-                  Complete Mesocycle
-                </Text>
-              </TouchableOpacity>
-            )}
+        <View style={styles.dialogContent}>
+          <Text style={styles.dialogMessage}>
+            Are you sure you want to delete this mesocycle? This will delete all associated plan instances,
+            workout instances, and progress data. This action cannot be undone.
+          </Text>
+          <View style={styles.dialogActions}>
             <TouchableOpacity
-              style={styles.menuItem}
-              onPress={() => {
-                setMenuVisible(false);
-                setDeleteDialogVisible(true);
-              }}
+              style={[styles.dialogButton, styles.cancelButton]}
+              onPress={() => setDeleteDialogVisible(false)}
             >
-              <MaterialIcons
-                name="delete"
-                size={24}
-                color={themeColors.accent.error}
-              />
-              <Text style={[styles.menuItemText, styles.errorText]}>
-                Delete Mesocycle
-              </Text>
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.dialogButton, styles.deleteButton]}
+              onPress={handleDelete}
+            >
+              <Text style={styles.deleteButtonText}>Delete</Text>
             </TouchableOpacity>
           </View>
-        </TouchableOpacity>
-      </Modal>
+        </View>
+      </BottomDrawer>
 
-      {/* Delete Confirmation Dialog */}
-      <Modal
-        visible={deleteDialogVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setDeleteDialogVisible(false)}
-      >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setDeleteDialogVisible(false)}
-        >
-          <View style={styles.dialogContent}>
-            <Text style={styles.dialogTitle}>Delete Mesocycle</Text>
-            <Text style={styles.dialogMessage}>
-              Are you sure you want to delete this mesocycle? This will delete all associated plan instances,
-              workout instances, and progress data. This action cannot be undone.
-            </Text>
-            <View style={styles.dialogActions}>
-              <TouchableOpacity
-                style={[styles.dialogButton, styles.cancelButton]}
-                onPress={() => setDeleteDialogVisible(false)}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.dialogButton, styles.deleteButton]}
-                onPress={handleDelete}
-              >
-                <Text style={styles.deleteButtonText}>Delete</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </TouchableOpacity>
-      </Modal>
-
-      {/* Complete Confirmation Dialog */}
-      <Modal
+      {/* Complete Confirmation Drawer */}
+      <BottomDrawer
         visible={completeDialogVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setCompleteDialogVisible(false)}
+        onClose={() => setCompleteDialogVisible(false)}
+        title="Complete Mesocycle"
       >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setCompleteDialogVisible(false)}
-        >
-          <View style={styles.dialogContent}>
-            <Text style={styles.dialogTitle}>Complete Mesocycle</Text>
-            <Text style={styles.dialogMessage}>
-              Are you sure you want to complete this mesocycle? This will mark the mesocycle as complete.
-              Your progress data will be preserved, but you won't be able to continue tracking workouts
-              for this mesocycle.
-            </Text>
-            <View style={styles.dialogActions}>
-              <TouchableOpacity
-                style={[styles.dialogButton, styles.cancelButton]}
-                onPress={() => setCompleteDialogVisible(false)}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.dialogButton, styles.completeButton]}
-                onPress={handleComplete}
-              >
-                <Text style={styles.completeButtonText}>Complete</Text>
-              </TouchableOpacity>
-            </View>
+        <View style={styles.dialogContent}>
+          <Text style={styles.dialogMessage}>
+            Are you sure you want to complete this mesocycle? This will mark the mesocycle as complete.
+            Your progress data will be preserved, but you won't be able to continue tracking workouts
+            for this mesocycle.
+          </Text>
+          <View style={styles.dialogActions}>
+            <TouchableOpacity
+              style={[styles.dialogButton, styles.cancelButton]}
+              onPress={() => setCompleteDialogVisible(false)}
+            >
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.dialogButton, styles.completeButton]}
+              onPress={handleComplete}
+            >
+              <Text style={styles.completeButtonText}>Complete</Text>
+            </TouchableOpacity>
           </View>
-        </TouchableOpacity>
-      </Modal>
+        </View>
+      </BottomDrawer>
     </View>
   );
 };
@@ -709,36 +666,6 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     textAlign: 'center',
   },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: spacing.lg,
-  },
-  menuContent: {
-    backgroundColor: themeColors.background.primary,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: themeColors.border.default,
-    minWidth: 200,
-    overflow: 'hidden',
-  },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: themeColors.border.default,
-    gap: spacing.sm,
-  },
-  menuItemText: {
-    fontSize: 16,
-    flex: 1,
-  },
-  warningText: {
-    color: themeColors.accent.warning,
-  },
   errorText: {
     color: themeColors.accent.error,
     fontSize: 16,
@@ -746,19 +673,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   dialogContent: {
-    backgroundColor: themeColors.background.primary,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    borderColor: themeColors.border.default,
     padding: spacing.md,
-    width: '100%',
-    maxWidth: 400,
-  },
-  dialogTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: themeColors.text.primary,
-    marginBottom: spacing.md,
+    paddingTop: 0,
   },
   dialogMessage: {
     fontSize: 14,

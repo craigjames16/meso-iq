@@ -10,6 +10,8 @@ import { AccountSettingsScreen } from '../screens/main/AccountSettingsScreen';
 import { PlanDetailScreen } from '../screens/plan/PlanDetailScreen';
 import { EditPlanScreen } from '../screens/plan/EditPlanScreen';
 import { MesocycleDetailScreen } from '../screens/mesocycle/MesocycleDetailScreen';
+import { HeatmapScreen } from '../screens/main/HeatmapScreen';
+import { ExerciseDetailScreen } from '../screens/exercise/ExerciseDetailScreen';
 import type { MainTabParamList } from './MainNavigator';
 
 export type RootStackParamList = {
@@ -19,6 +21,8 @@ export type RootStackParamList = {
   PlanDetail: { planId: number };
   EditPlan: { planId: number };
   MesocycleDetail: { mesocycleId: number };
+  Heatmap: { mesocycleId: number | null };
+  ExerciseDetail: { exerciseId: number };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -40,6 +44,7 @@ export const AppNavigator: React.FC = () => {
         <Stack.Navigator
           screenOptions={{
             headerShown: false,
+            headerBackButtonDisplayMode: 'minimal',
             contentStyle: { backgroundColor: '#1a1a1a' },
           }}
         >
@@ -99,6 +104,28 @@ export const AppNavigator: React.FC = () => {
               title: 'Mesocycle Details',
             }}
           />
+          <Stack.Screen 
+            name="Heatmap" 
+            component={HeatmapScreen}
+            options={{
+              headerShown: true,
+              headerStyle: { backgroundColor: '#1a1a1a' },
+              headerTintColor: '#fff',
+              headerTitleStyle: { fontWeight: 'bold' },
+              title: 'Workout Heatmap',
+            }}
+          />
+          <Stack.Screen 
+            name="ExerciseDetail" 
+            component={ExerciseDetailScreen}
+            options={{
+              headerShown: true,
+              headerStyle: { backgroundColor: '#1a1a1a' },
+              headerTintColor: '#fff',
+              headerTitleStyle: { fontWeight: 'bold' },
+              title: 'Exercise Details',
+            }}
+          />
         </Stack.Navigator>
       ) : (
         <AuthNavigator />
@@ -115,4 +142,5 @@ const styles = StyleSheet.create({
     backgroundColor: '#1a1a1a',
   },
 });
+
 

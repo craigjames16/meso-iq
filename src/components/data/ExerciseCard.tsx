@@ -4,7 +4,11 @@ import {
   Text,
   StyleSheet,
   useWindowDimensions,
+  TouchableOpacity,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../../navigation/AppNavigator';
 import { SvgChart, SVGRenderer } from '@wuba/react-native-echarts';
 import * as echarts from 'echarts/core';
 import { BarChart, LineChart } from 'echarts/charts';
@@ -44,6 +48,11 @@ export const ExerciseCard: React.FC<ExerciseCardProps> = ({ exercise }) => {
   const chartRef = useRef<any>(null);
   const { width: screenWidth } = useWindowDimensions();
   const chartWidth = screenWidth - spacing.md * 4;
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+
+  const handlePress = () => {
+    navigation.navigate('ExerciseDetail', { exerciseId: exercise.id });
+  };
 
   const transformedData: ExerciseTransformedDataPoint[] = useMemo(() => {
     return exercise.volumeProgression.map((point, index) => {
@@ -180,7 +189,7 @@ export const ExerciseCard: React.FC<ExerciseCardProps> = ({ exercise }) => {
   }, [chartOption, chartWidth]);
 
   return (
-    <View style={styles.card}>
+    <TouchableOpacity style={styles.card} onPress={handlePress} activeOpacity={0.7}>
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerContent}>
@@ -247,7 +256,7 @@ export const ExerciseCard: React.FC<ExerciseCardProps> = ({ exercise }) => {
           </View>
         </>
       )}
-    </View>
+    </TouchableOpacity>
   );
 };
 

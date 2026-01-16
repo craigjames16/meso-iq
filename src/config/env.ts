@@ -44,6 +44,9 @@ export const API_ENDPOINTS = {
   },
   EXERCISES: {
     LIST: '/api/exercises',
+    GET: (id: number) => `/api/exercises/${id}`,
+    UPDATE: (id: number) => `/api/exercises/${id}`,
+    DELETE: (id: number) => `/api/exercises/${id}`,
   },
   PLANS: {
     LIST: '/api/plans',
@@ -62,4 +65,5 @@ export const API_ENDPOINTS = {
     EXERCISE_STATS: '/api/dashboard?data=exerciseStats',
   },
 };
+
 
