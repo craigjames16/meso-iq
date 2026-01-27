@@ -51,6 +51,7 @@ export const API_ENDPOINTS = {
   PLANS: {
     LIST: '/api/plans',
     GET: (id: number) => `/api/plans/${id}`,
+    CREATE_WITH_AI: '/api/plans/create-with-ai',
   },
   DASHBOARD: {
     MUSCLE_GROUP_VOLUME: (mesocycleId?: number) =>

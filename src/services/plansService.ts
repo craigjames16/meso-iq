@@ -58,5 +58,16 @@ export const plansService = {
       throw new Error(error.message || 'Failed to update plan');
     }
   },
+
+  async createPlanWithAI(prompt: string): Promise<Plan> {
+    try {
+      const response = await apiClient.post<{ plan: Plan }>(API_ENDPOINTS.PLANS.CREATE_WITH_AI, { prompt });
+      // API returns { plan: Plan, message: string }
+      return response.plan || response as any;
+    } catch (error: any) {
+      console.error('Error creating plan with AI:', error);
+      throw new Error(error.message || 'Failed to create plan with AI');
+    }
+  },
 };
 

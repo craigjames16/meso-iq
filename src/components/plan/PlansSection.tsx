@@ -16,6 +16,7 @@ import { BottomDrawer } from '../BottomDrawer';
 import { plansService } from '../../services/plansService';
 import { Plan } from '../../types/plan';
 import type { RootStackParamList } from '../../navigation/AppNavigator';
+import { AIPlanChatModal } from './AIPlanChatModal';
 
 export interface PlansSectionRef {
   openCreateDialog: () => void;
@@ -31,6 +32,7 @@ export const PlansSection = forwardRef<PlansSectionRef>((props, ref) => {
   const [modalVisible, setModalVisible] = useState(false);
   const [newPlanName, setNewPlanName] = useState('');
   const [creating, setCreating] = useState(false);
+  const [aiModalVisible, setAiModalVisible] = useState(false);
 
   useImperativeHandle(ref, () => ({
     openCreateDialog: () => setModalVisible(true),
@@ -73,6 +75,13 @@ export const PlansSection = forwardRef<PlansSectionRef>((props, ref) => {
     } finally {
       setCreating(false);
     }
+  };
+
+  const handlePlanCreated = (planId: number) => {
+    // Refresh plans list
+    fetchPlans();
+    // Navigate to plan detail
+    navigation.navigate('PlanDetail', { planId });
   };
 
   const renderPlanCard = ({ item }: { item: Plan }) => {
@@ -161,7 +170,36 @@ export const PlansSection = forwardRef<PlansSectionRef>((props, ref) => {
         title="Create New Plan"
       >
         <View style={styles.drawerContent}>
-          <Text style={styles.inputLabel}>Plan Name</Text>
+          {/* AI Create Option */}
+          <TouchableOpacity
+            style={styles.aiOptionButton}
+            onPress={() => {
+              setModalVisible(false);
+              setAiModalVisible(true);
+            }}
+            activeOpacity={0.7}
+          >
+            <MaterialIcons
+              name="auto-awesome"
+              size={20}
+              color={themeColors.primary.main}
+            />
+            <View style={styles.aiOptionTextContainer}>
+              <Text style={styles.aiOptionTitle}>Create with AI</Text>
+              <Text style={styles.aiOptionSubtext}>
+                Describe your workout plan and let AI create it
+              </Text>
+            </View>
+            <MaterialIcons
+              name="chevron-right"
+              size={24}
+              color={themeColors.text.secondary}
+            />
+          </TouchableOpacity>
+
+          <View style={styles.divider} />
+
+          <Text style={styles.inputLabel}>Or create manually</Text>
           <TextInput
             style={styles.textInput}
             value={newPlanName}
@@ -199,6 +237,13 @@ export const PlansSection = forwardRef<PlansSectionRef>((props, ref) => {
           </View>
         </View>
       </BottomDrawer>
+
+      {/* AI Plan Chat Modal */}
+      <AIPlanChatModal
+        visible={aiModalVisible}
+        onClose={() => setAiModalVisible(false)}
+        onPlanCreated={handlePlanCreated}
+      />
     </View>
   );
 });
@@ -372,6 +417,35 @@ const styles = StyleSheet.create({
     color: themeColors.text.primary,
     fontSize: 14,
     fontWeight: '600',
+  },
+  aiOptionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: themeColors.background.surface,
+    borderWidth: 1,
+    borderColor: themeColors.border.default,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    gap: spacing.sm,
+  },
+  aiOptionTextContainer: {
+    flex: 1,
+  },
+  aiOptionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: themeColors.text.primary,
+    marginBottom: spacing.xs / 2,
+  },
+  aiOptionSubtext: {
+    fontSize: 12,
+    color: themeColors.text.secondary,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: themeColors.border.default,
+    marginVertical: spacing.md,
   },
 });
 
