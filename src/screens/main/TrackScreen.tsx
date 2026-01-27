@@ -34,7 +34,9 @@ const NextWorkout: React.FC<{
   onStartWorkout: (workoutInstanceId: number) => void;
   isStartingWorkout: boolean;
 }> = ({ currentMesocycle, onStartWorkout, isStartingWorkout }) => {
+  const navigation = useNavigation<TrackScreenNavigationProp>();
   const [nextWorkout, setNextWorkout] = useState<PlanInstanceDay | null>(null);
+  const [inProgressWorkout, setInProgressWorkout] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isStarting, setIsStarting] = useState(false);
@@ -43,26 +45,40 @@ const NextWorkout: React.FC<{
   useFocusEffect(
     React.useCallback(() => {
       const fetchNextWorkout = async () => {
-        if (!currentMesocycle) {
-          setLoading(false);
-          return;
-        }
-        
         // Reset states when screen comes into focus
         setIsStarting(false);
         setError(null);
         setLoading(true);
+        setInProgressWorkout(null);
+        setNextWorkout(null);
         
         try {
-          console.log('Fetching schedule for mesocycle:', currentMesocycle.id);
-          const data = await workoutService.getSchedule(currentMesocycle.id);
-          console.log('Schedule data received:', JSON.stringify(data.upcomingDays, null, 2));
+          // Priority 1: Check for in-progress workout instance
+          console.log('Checking for in-progress workout...');
+          const latestWorkoutData = await workoutService.getLatestWorkout();
           
-          // Get the first upcoming day
-          const firstUpcomingDay = data.upcomingDays.length > 0 ? data.upcomingDays[0] : null;
-          setNextWorkout(firstUpcomingDay);
+          if (latestWorkoutData && latestWorkoutData.inProgress === true) {
+            console.log('Found in-progress workout:', latestWorkoutData);
+            setInProgressWorkout(latestWorkoutData);
+            setLoading(false);
+            return;
+          }
+          
+          // Priority 2: Check for next workout in mesocycle
+          if (currentMesocycle) {
+            console.log('Fetching schedule for mesocycle:', currentMesocycle.id);
+            const data = await workoutService.getSchedule(currentMesocycle.id);
+            console.log('Schedule data received:', JSON.stringify(data.upcomingDays, null, 2));
+            
+            // Get the first upcoming day
+            const firstUpcomingDay = data.upcomingDays.length > 0 ? data.upcomingDays[0] : null;
+            setNextWorkout(firstUpcomingDay);
+          } else {
+            // No mesocycle, no in-progress workout - will show empty state
+            setNextWorkout(null);
+          }
         } catch (err) {
-          console.error('Error fetching schedule:', err);
+          console.error('Error fetching workout data:', err);
           const errorMessage = err instanceof Error ? err.message : 'An error occurred';
           console.error('Error details:', {
             message: errorMessage,
@@ -77,6 +93,24 @@ const NextWorkout: React.FC<{
       fetchNextWorkout();
     }, [currentMesocycle])
   );
+
+  const handleContinueWorkout = async () => {
+    if (!inProgressWorkout || !inProgressWorkout.workoutInstanceId) {
+      setError('Missing workout instance ID');
+      Alert.alert('Error', 'Missing workout instance ID');
+      return;
+    }
+
+    setIsStarting(true);
+    try {
+      onStartWorkout(inProgressWorkout.workoutInstanceId);
+    } catch (err) {
+      console.error('Error continuing workout:', err);
+      setError(err instanceof Error ? err.message : 'Failed to continue workout');
+      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to continue workout');
+      setIsStarting(false);
+    }
+  };
 
   const handleStartWorkout = async () => {
     if (!nextWorkout) return;
@@ -159,8 +193,6 @@ const NextWorkout: React.FC<{
     }
   };
   
-  const isButtonLoading = isStarting || isStartingWorkout;
-  
   if (loading) {
     return (
       <View style={styles.nextWorkoutHeader}>
@@ -183,13 +215,112 @@ const NextWorkout: React.FC<{
     );
   }
   
-  if (!nextWorkout || !nextWorkout.planDay) {
+  const handleStartSingleWorkout = async () => {
+    try {
+      setIsStarting(true);
+      const workoutInstance = await workoutService.createStandaloneWorkout();
+      setIsStarting(false); // Reset loading state before navigation
+      onStartWorkout(workoutInstance.id);
+    } catch (err) {
+      console.error('Error creating standalone workout:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Failed to create workout';
+      setError(errorMessage);
+      Alert.alert('Error', errorMessage);
+      setIsStarting(false);
+    }
+  };
+
+  const handleCreateMesocycle = () => {
+    // Navigate to Plan tab - using navigate since we're in a composite navigator
+    navigation.navigate('Plan');
+  };
+
+  const isButtonLoading = isStarting || isStartingWorkout;
+
+  // Priority 1: Show in-progress workout with Continue button
+  if (inProgressWorkout && inProgressWorkout.inProgress === true) {
+    const workoutName = inProgressWorkout.workoutName || 'Workout';
+    
     return (
       <View style={styles.nextWorkoutHeader}>
         <View style={styles.nextWorkoutContent}>
-          <Text style={styles.cardText}>
-            No upcoming workouts found. Please check your mesocycle configuration.
+          <MaterialIcons name="fitness-center" size={24} color={themeColors.primary.main} />
+          <View style={styles.nextWorkoutInfo}>
+            <Text style={styles.nextWorkoutTitle}>
+              Continue Workout
+            </Text>
+            <Text style={styles.nextWorkoutSubtitle}>
+              {workoutName}
+            </Text>
+          </View>
+          
+          <TouchableOpacity
+            style={[
+              styles.playButton,
+              styles.workoutButton,
+              isButtonLoading && styles.buttonDisabled
+            ]}
+            onPress={handleContinueWorkout}
+            disabled={isButtonLoading}
+          >
+            {isButtonLoading ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <MaterialIcons 
+                name="play-arrow" 
+                size={20} 
+                color={"#fff"} 
+              />
+            )}
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  // Priority 2: Show next mesocycle workout or empty state
+  if (!nextWorkout || !nextWorkout.planDay) {
+    return (
+      <View style={styles.nextWorkoutHeader}>
+        <View style={styles.emptyStateContainer}>
+          <Text style={styles.emptyStateTitle}>
+            {!currentMesocycle ? 'Get Started' : 'No Upcoming Workouts'}
           </Text>
+          <Text style={styles.emptyStateSubtitle}>
+            {!currentMesocycle 
+              ? 'Start a single workout or create a mesocycle to begin tracking your progress'
+              : 'Start a quick workout or check your mesocycle schedule'}
+          </Text>
+          <View style={styles.emptyStateButtons}>
+            <TouchableOpacity
+              style={[
+                styles.emptyStateButton,
+                styles.primaryButton,
+                isButtonLoading && styles.buttonDisabled
+              ]}
+              onPress={handleStartSingleWorkout}
+              disabled={isButtonLoading}
+            >
+              {isButtonLoading ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <MaterialIcons name="play-arrow" size={20} color="#fff" />
+                  <Text style={styles.emptyStateButtonText}>Start Single Workout</Text>
+                </>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.emptyStateButton,
+                styles.secondaryButton
+              ]}
+              onPress={handleCreateMesocycle}
+            >
+              <MaterialIcons name="fitness-center" size={20} color="#fff" />
+              <Text style={styles.emptyStateButtonText}>Create Mesocycle</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
     );
@@ -474,5 +605,50 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.6,
+  },
+  emptyStateContainer: {
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  emptyStateTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#fff',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  emptyStateSubtitle: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.6)',
+    textAlign: 'center',
+    marginBottom: 20,
+    paddingHorizontal: 20,
+  },
+  emptyStateButtons: {
+    width: '100%',
+    gap: 12,
+    paddingHorizontal: 20,
+  },
+  emptyStateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    gap: 8,
+  },
+  primaryButton: {
+    backgroundColor: themeColors.primary.main,
+  },
+  secondaryButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  emptyStateButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

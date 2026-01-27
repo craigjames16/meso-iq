@@ -7,7 +7,6 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
-  Modal,
   FlatList,
 } from 'react-native';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
@@ -18,6 +17,11 @@ import type { RootStackParamList } from '../../navigation/AppNavigator';
 import { ExerciseTrackingCard, type ExerciseTracking, type ExerciseSet } from '../../components/ExerciseTrackingCard';
 import type { HistoryInstance } from '../../components/ExerciseHistoryModal';
 import { BottomDrawer } from '../../components/BottomDrawer';
+import { DropdownMenu, type DropdownMenuItem } from '../../components/DropdownMenu';
+import { ConfirmationModal } from '../../components/ConfirmationModal';
+import { themeColors, spacing, borderRadius } from '../../theme/colors';
+
+// Categories will be extracted from backend response
 
 type WorkoutDetailScreenRouteProp = RouteProp<RootStackParamList, 'WorkoutDetail'>;
 type WorkoutDetailScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'WorkoutDetail'>;
@@ -33,11 +37,12 @@ export const WorkoutDetailScreen: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [completing, setCompleting] = useState(false);
   const [addExerciseModalVisible, setAddExerciseModalVisible] = useState(false);
+  const [menuVisible, setMenuVisible] = useState(false);
+  const [endWorkoutConfirmVisible, setEndWorkoutConfirmVisible] = useState(false);
   const [availableExercises, setAvailableExercises] = useState<any[]>([]);
+  const [availableCategories, setAvailableCategories] = useState<string[]>(['ALL']);
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
-  const [selectedExercise, setSelectedExercise] = useState<string>('');
-  const [categoryPickerVisible, setCategoryPickerVisible] = useState(false);
-  const [exercisePickerVisible, setExercisePickerVisible] = useState(false);
+  const [selectedExercises, setSelectedExercises] = useState<string[]>([]);
 
   useEffect(() => {
     fetchWorkoutData();
@@ -56,11 +61,28 @@ export const WorkoutDetailScreen: React.FC = () => {
       let exercisesArray: any[] = [];
       
       // Handle different response formats
-      if (Array.isArray(exercisesData)) {
-        // If it's already an array, use it directly
-        exercisesArray = exercisesData;
+      let categoriesFromBackend: string[] = [];
+      
+      // Check if response is empty object
+      if (exercisesData && typeof exercisesData === 'object' && Object.keys(exercisesData).length === 0) {
+        setAvailableExercises([]);
+        setAvailableCategories(['ALL']);
+      } else if (Array.isArray(exercisesData)) {
+        // If it's already an array, normalize categories to uppercase
+        exercisesArray = exercisesData.map((exercise: any) => ({
+          ...exercise,
+          category: (exercise.category || '').toUpperCase(),
+        }));
+        categoriesFromBackend = [...new Set(exercisesArray.map((ex: any) => ex.category).filter(Boolean))].sort();
+        setAvailableExercises(exercisesArray);
+        setAvailableCategories(['ALL', ...categoriesFromBackend]);
       } else if (typeof exercisesData === 'object' && exercisesData !== null) {
-        // If it's an object with categories, flatten it
+        // If it's an object with categories, flatten it and extract categories from keys
+        categoriesFromBackend = Object.keys(exercisesData)
+          .map(cat => cat.toUpperCase())
+          .filter(Boolean)
+          .sort();
+        
         exercisesArray = Object.entries(exercisesData).flatMap(([category, exerciseList]: [string, any]) => {
           if (!Array.isArray(exerciseList)) {
             console.warn(`Exercise list for category ${category} is not an array:`, exerciseList);
@@ -68,14 +90,19 @@ export const WorkoutDetailScreen: React.FC = () => {
           }
           return exerciseList.map((exercise: any) => ({
             ...exercise,
-            category: category,
+            // Prefer exercise's own category property, fall back to object key, normalize to uppercase
+            category: (exercise.category || category || '').toUpperCase(),
           }));
         });
+        
+        setAvailableExercises(exercisesArray);
+        // Set available categories from backend, with 'ALL' as first option
+        setAvailableCategories(['ALL', ...categoriesFromBackend]);
+      } else {
+        console.warn('Unexpected exercises data format:', typeof exercisesData, exercisesData);
+        setAvailableExercises([]);
+        setAvailableCategories(['ALL']);
       }
-      
-      console.log('Processed exercises array:', exercisesArray.length, 'exercises');
-      console.log('Sample exercise:', exercisesArray[0]);
-      setAvailableExercises(exercisesArray);
       
       // Get current mesocycle ID from workout data
       const currentMesocycleId = workoutData.mesocycleId || 
@@ -257,6 +284,7 @@ export const WorkoutDetailScreen: React.FC = () => {
   const handleCompleteWorkout = async () => {
     try {
       setCompleting(true);
+      setEndWorkoutConfirmVisible(false);
       const workoutData = await workoutService.completeWorkout(workoutInstanceId);
       setWorkoutInstance((prev: any) =>
         prev
@@ -372,96 +400,121 @@ export const WorkoutDetailScreen: React.FC = () => {
   };
 
   const handleAddExercise = async () => {
-    if (!selectedExercise) {
-      Alert.alert('Error', 'Please select an exercise');
+    if (selectedExercises.length === 0) {
+      Alert.alert('Error', 'Please select at least one exercise');
       return;
     }
 
     try {
-      const workoutData = await workoutService.addExercise(workoutInstanceId, parseInt(selectedExercise));
+      const exerciseIds = selectedExercises.map((id) => parseInt(id));
+      const workoutData = await workoutService.addExercise(workoutInstanceId, exerciseIds);
       setWorkoutInstance(workoutData);
 
-      const newExercise = workoutData.workoutExercises.find(
-        (ex: any) => ex.exercise.id === parseInt(selectedExercise)
-      );
+      // Get current mesocycle ID
+      const currentMesocycleId = workoutData.mesocycleId || 
+        workoutData.planInstanceDays?.[0]?.planInstance?.mesocycle?.id;
 
-      if (newExercise) {
-        // Find the exercise to get history data
-        const currentExercise = availableExercises.find(
-          (ex: any) => ex.id === newExercise.exercise.id
-        );
-        
-        // Get current mesocycle ID
-        const currentMesocycleId = workoutData.mesocycleId || 
-          workoutData.planInstanceDays?.[0]?.planInstance?.mesocycle?.id;
-        
-        // Get all workout instances for this exercise (history)
-        const history: HistoryInstance[] = currentExercise?.workoutInstances
-          ?.filter((instance: any) => instance.completedAt)
-          ?.map((instance: any) => ({
-            workoutInstanceId: instance.workoutInstanceId,
-            volume: instance.volume,
-            completedAt: instance.completedAt,
-            sets: instance.sets || [],
-          })) || [];
-        
-        // Filter mesocycle-specific history
-        const mesocycleHistory: HistoryInstance[] = currentExercise?.workoutInstances
-          ?.filter((instance: any) => 
-            instance.mesocycleId === currentMesocycleId && 
-            instance.workoutInstanceId !== workoutData.id &&
-            instance.completedAt
-          )
-          ?.sort((a: any, b: any) => 
-            new Date(a.completedAt).getTime() - new Date(b.completedAt).getTime()
-          )
-          ?.map((instance: any) => ({
-            workoutInstanceId: instance.workoutInstanceId,
-            volume: instance.volume,
-            completedAt: instance.completedAt,
-            sets: instance.sets || [],
-          })) || [];
+      // Process all newly added exercises
+      const newExerciseTrackings: ExerciseTracking[] = exerciseIds
+        .map((exerciseId) => {
+          const newExercise = workoutData.workoutExercises.find(
+            (ex: any) => ex.exercise.id === exerciseId
+          );
 
-        const numSets = newExercise.lastSets?.length || 3;
-        const newExerciseTracking: ExerciseTracking = {
-          exerciseId: newExercise.exercise.id,
-          exerciseName: newExercise.exercise.name,
-          order: newExercise.order,
-          sets: Array.from({ length: numSets }, (_, index) => {
-            const matchingLastSet = newExercise.lastSets?.find(
-              (lastSet: any) => lastSet.setNumber === index + 1
-            );
-            return {
-              reps: 0,
-              weight: 0,
-              setNumber: index + 1,
-              lastSet: matchingLastSet || null,
-            };
-          }),
-          history,
-          mesocycleHistory,
-        };
+          if (!newExercise) {
+            return null;
+          }
 
-        setExerciseTrackings((prev) => {
-          const updated = [...prev, newExerciseTracking];
-          return updated.sort((a, b) => a.order - b.order);
-        });
-      }
+          // Find the exercise to get history data
+          const currentExercise = availableExercises.find(
+            (ex: any) => ex.id === exerciseId
+          );
+          
+          // Get all workout instances for this exercise (history)
+          const history: HistoryInstance[] = currentExercise?.workoutInstances
+            ?.filter((instance: any) => instance.completedAt)
+            ?.map((instance: any) => ({
+              workoutInstanceId: instance.workoutInstanceId,
+              volume: instance.volume,
+              completedAt: instance.completedAt,
+              sets: instance.sets || [],
+            })) || [];
+          
+          // Filter mesocycle-specific history
+          const mesocycleHistory: HistoryInstance[] = currentExercise?.workoutInstances
+            ?.filter((instance: any) => 
+              instance.mesocycleId === currentMesocycleId && 
+              instance.workoutInstanceId !== workoutData.id &&
+              instance.completedAt
+            )
+            ?.sort((a: any, b: any) => 
+              new Date(a.completedAt).getTime() - new Date(b.completedAt).getTime()
+            )
+            ?.map((instance: any) => ({
+              workoutInstanceId: instance.workoutInstanceId,
+              volume: instance.volume,
+              completedAt: instance.completedAt,
+              sets: instance.sets || [],
+            })) || [];
 
-      setSelectedExercise('');
+          const numSets = newExercise.lastSets?.length || 3;
+          return {
+            exerciseId: newExercise.exercise.id,
+            exerciseName: newExercise.exercise.name,
+            order: newExercise.order,
+            sets: Array.from({ length: numSets }, (_, index) => {
+              const matchingLastSet = newExercise.lastSets?.find(
+                (lastSet: any) => lastSet.setNumber === index + 1
+              );
+              return {
+                reps: 0,
+                weight: 0,
+                setNumber: index + 1,
+                lastSet: matchingLastSet || null,
+              };
+            }),
+            history,
+            mesocycleHistory,
+          } as ExerciseTracking;
+        })
+        .filter((tracking): tracking is ExerciseTracking => tracking !== null);
+
+      setExerciseTrackings((prev) => {
+        const updated = [...prev, ...newExerciseTrackings];
+        return updated.sort((a, b) => a.order - b.order);
+      });
+
+      setSelectedExercises([]);
       setSelectedCategory('ALL');
       setAddExerciseModalVisible(false);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error adding exercise:', err);
-      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to add exercise');
+      
+      // Extract error message - check multiple possible locations
+      const errorMessage = err?.message || err?.error || err?.errorData?.message || 'Failed to add exercise';
+      
+      // Check if it's the specific "already added" error (409 status or message contains "already")
+      const isAlreadyAddedError = err?.status === 409 || 
+                                  errorMessage.toLowerCase().includes('already') || 
+                                  errorMessage.toLowerCase().includes('already in this workout');
+      
+      if (isAlreadyAddedError) {
+        Alert.alert('Exercise Already Added', errorMessage);
+      } else {
+        Alert.alert('Error', errorMessage);
+      }
     }
   };
 
   const getCategories = () => {
-    const categories = new Set(availableExercises.map((ex) => ex.category));
-    const categoryArray = Array.from(categories).sort();
-    console.log('Available categories:', categoryArray);
-    return categoryArray;
+    // Use categories from backend response
+    console.log('Available categories from state:', availableCategories);
+    return availableCategories;
+  };
+
+  const formatCategoryName = (category: string) => {
+    if (category === 'ALL') return 'All Categories';
+    return category.charAt(0) + category.slice(1).toLowerCase();
   };
 
   const getFilteredExercises = () => {
@@ -469,9 +522,24 @@ export const WorkoutDetailScreen: React.FC = () => {
     if (selectedCategory === 'ALL') {
       filtered = availableExercises;
     } else {
-      filtered = availableExercises.filter((ex) => ex.category === selectedCategory);
+      // Case-insensitive category matching
+      filtered = availableExercises.filter((ex) => {
+        const exCategory = ex.category ? ex.category.toUpperCase() : '';
+        const selectedCat = selectedCategory.toUpperCase();
+        const matches = exCategory === selectedCat;
+        if (!matches && exCategory) {
+          console.log(`Exercise "${ex.name}" category "${exCategory}" doesn't match selected "${selectedCat}"`);
+        }
+        return matches;
+      });
     }
     console.log('Filtered exercises for category', selectedCategory, ':', filtered.length);
+    console.log('Available exercises total:', availableExercises.length);
+    console.log('Selected category:', selectedCategory);
+    console.log('Available categories:', availableCategories);
+    if (filtered.length === 0 && availableExercises.length > 0) {
+      console.log('Sample exercise categories:', availableExercises.slice(0, 5).map(ex => ({ name: ex.name, category: ex.category })));
+    }
     return filtered;
   };
 
@@ -513,7 +581,7 @@ export const WorkoutDetailScreen: React.FC = () => {
             </Text>
           </View>
           <TouchableOpacity
-            onPress={() => setAddExerciseModalVisible(true)}
+            onPress={() => setMenuVisible(true)}
             disabled={isWorkoutCompleted}
             style={[styles.addExerciseButton, isWorkoutCompleted && styles.addExerciseButtonDisabled]}
           >
@@ -527,6 +595,20 @@ export const WorkoutDetailScreen: React.FC = () => {
         {exerciseTrackings.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyText}>No exercises in this workout</Text>
+            <Text style={styles.emptySubtext}>
+              Add your first exercise to begin tracking
+            </Text>
+            <TouchableOpacity
+              style={[
+                styles.addExerciseEmptyButton,
+                isWorkoutCompleted && styles.addExerciseEmptyButtonDisabled
+              ]}
+              onPress={() => setAddExerciseModalVisible(true)}
+              disabled={isWorkoutCompleted}
+            >
+              <MaterialIcons name="add" size={20} color="#fff" />
+              <Text style={styles.addExerciseEmptyButtonText}>Add Exercise</Text>
+            </TouchableOpacity>
           </View>
         ) : (
           exerciseTrackings.map((exercise, exerciseIndex) => (
@@ -573,191 +655,164 @@ export const WorkoutDetailScreen: React.FC = () => {
         </View>
       )}
 
+      {/* Menu Dropdown */}
+      <DropdownMenu
+        visible={menuVisible}
+        onClose={() => setMenuVisible(false)}
+        items={[
+          {
+            label: 'Add Exercise',
+            icon: 'add',
+            onPress: () => setAddExerciseModalVisible(true),
+            disabled: isWorkoutCompleted,
+          },
+          {
+            label: 'End Workout',
+            icon: 'check-circle',
+            onPress: () => {
+              setMenuVisible(false);
+              setEndWorkoutConfirmVisible(true);
+            },
+            disabled: isWorkoutCompleted || completing,
+          },
+        ]}
+      />
+
+      {/* End Workout Confirmation Modal */}
+      <ConfirmationModal
+        visible={endWorkoutConfirmVisible}
+        onClose={() => setEndWorkoutConfirmVisible(false)}
+        onConfirm={handleCompleteWorkout}
+        title="End Workout"
+        message={
+          allSetsCompleted
+            ? 'Are you sure you want to end this workout?'
+            : `You have ${totalSets - completedSets} incomplete set${totalSets - completedSets > 1 ? 's' : ''}. Are you sure you want to end this workout?`
+        }
+        confirmText="End Workout"
+        cancelText="Cancel"
+        confirmButtonStyle="default"
+        loading={completing}
+      />
+
       {/* Add Exercise Modal */}
       <BottomDrawer
         visible={addExerciseModalVisible}
         onClose={() => {
           setAddExerciseModalVisible(false);
-          setSelectedExercise('');
+          setSelectedExercises([]);
           setSelectedCategory('ALL');
         }}
         title="Add Exercise"
+        height="80%"
       >
         <View style={styles.addExerciseModalContent}>
-          <View style={styles.pickerContainer}>
-            <Text style={styles.pickerLabel}>Category</Text>
-            <TouchableOpacity
-              style={styles.pickerWrapper}
-              onPress={() => setCategoryPickerVisible(true)}
+          {/* Category Pills */}
+          <View style={styles.categoryPillsContainer}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.categoryPillsScrollContent}
             >
-              <Text style={styles.pickerText}>
-                {selectedCategory === 'ALL'
-                  ? 'All Categories'
-                  : selectedCategory.charAt(0) + selectedCategory.slice(1).toLowerCase()}
-              </Text>
-              <MaterialIcons name="arrow-drop-down" size={24} color="#999" />
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.pickerContainer}>
-            <Text style={styles.pickerLabel}>Exercise</Text>
-            <TouchableOpacity
-              style={[
-                styles.pickerWrapper,
-                getFilteredExercises().length === 0 && styles.pickerWrapperDisabled,
-              ]}
-              onPress={() => {
-                if (getFilteredExercises().length > 0) {
-                  setExercisePickerVisible(true);
-                } else {
-                  Alert.alert('No Exercises', 'No exercises available for the selected category.');
-                }
-              }}
-              disabled={getFilteredExercises().length === 0}
-            >
-              <Text style={[styles.pickerText, !selectedExercise && styles.pickerTextPlaceholder]}>
-                {selectedExercise
-                  ? getFilteredExercises().find((ex) => ex.id.toString() === selectedExercise)?.name ||
-                    'Select an exercise'
-                  : getFilteredExercises().length === 0
-                  ? 'No exercises available'
-                  : 'Select an exercise'}
-              </Text>
-              <MaterialIcons name="arrow-drop-down" size={24} color="#999" />
-            </TouchableOpacity>
-          </View>
-
-          <TouchableOpacity
-            style={[
-              styles.addExerciseButtonModal,
-              (!selectedExercise || isWorkoutCompleted) && styles.addExerciseButtonModalDisabled,
-            ]}
-            onPress={handleAddExercise}
-            disabled={!selectedExercise || isWorkoutCompleted}
-          >
-            <Text style={styles.addExerciseButtonText}>Add Exercise</Text>
-          </TouchableOpacity>
-        </View>
-      </BottomDrawer>
-
-      {/* Category Picker Modal */}
-      <Modal
-        visible={categoryPickerVisible}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setCategoryPickerVisible(false)}
-      >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setCategoryPickerVisible(false)}
-        >
-          <View style={styles.pickerModalContainer}>
-            <View style={styles.pickerModalHeader}>
-              <Text style={styles.pickerModalTitle}>Select Category</Text>
-              <TouchableOpacity onPress={() => setCategoryPickerVisible(false)}>
-                <MaterialIcons name="close" size={24} color="#fff" />
-              </TouchableOpacity>
-            </View>
-            <FlatList
-              data={['ALL', ...getCategories()]}
-              keyExtractor={(item) => item}
-              style={styles.pickerFlatList}
-              contentContainerStyle={styles.pickerFlatListContent}
-              renderItem={({ item }) => (
+              {getCategories().map((cat) => (
                 <TouchableOpacity
+                  key={cat}
                   style={[
-                    styles.pickerItem,
-                    selectedCategory === item && styles.pickerItemSelected,
+                    styles.categoryPill,
+                    selectedCategory === cat && styles.categoryPillActive,
                   ]}
                   onPress={() => {
-                    setSelectedCategory(item);
-                    setSelectedExercise('');
-                    setCategoryPickerVisible(false);
+                    setSelectedCategory(cat);
+                    setSelectedExercises([]); // Reset exercise selection when category changes
                   }}
                 >
                   <Text
                     style={[
-                      styles.pickerItemText,
-                      selectedCategory === item && styles.pickerItemTextSelected,
+                      styles.categoryPillText,
+                      selectedCategory === cat && styles.categoryPillTextActive,
                     ]}
                   >
-                    {item === 'ALL'
-                      ? 'All Categories'
-                      : item.charAt(0) + item.slice(1).toLowerCase()}
+                    {formatCategoryName(cat)}
                   </Text>
-                  {selectedCategory === item && (
-                    <MaterialIcons name="check" size={20} color="#4CAF50" />
-                  )}
                 </TouchableOpacity>
-              )}
-              ListEmptyComponent={
-                <View style={styles.emptyPickerContainer}>
-                  <Text style={styles.emptyPickerText}>No categories available</Text>
-                </View>
-              }
-            />
+              ))}
+            </ScrollView>
           </View>
-        </TouchableOpacity>
-      </Modal>
 
-      {/* Exercise Picker Modal */}
-      <Modal
-        visible={exercisePickerVisible}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setExercisePickerVisible(false)}
-      >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setExercisePickerVisible(false)}
-        >
-          <View style={styles.pickerModalContainer}>
-            <View style={styles.pickerModalHeader}>
-              <Text style={styles.pickerModalTitle}>Select Exercise</Text>
-              <TouchableOpacity onPress={() => setExercisePickerVisible(false)}>
-                <MaterialIcons name="close" size={24} color="#fff" />
-              </TouchableOpacity>
-            </View>
-            <FlatList
-              data={getFilteredExercises()}
-              keyExtractor={(item) => item.id.toString()}
-              style={styles.pickerFlatList}
-              contentContainerStyle={styles.pickerFlatListContent}
-              renderItem={({ item }) => (
+          {/* Exercise List */}
+          <FlatList
+            data={getFilteredExercises()}
+            keyExtractor={(item) => item.id.toString()}
+            renderItem={({ item }) => {
+              const exerciseIdStr = item.id.toString();
+              const isSelected = selectedExercises.includes(exerciseIdStr);
+              return (
                 <TouchableOpacity
                   style={[
-                    styles.pickerItem,
-                    selectedExercise === item.id.toString() && styles.pickerItemSelected,
+                    styles.exerciseListItem,
+                    isSelected && styles.exerciseListItemSelected,
                   ]}
                   onPress={() => {
-                    setSelectedExercise(item.id.toString());
-                    setExercisePickerVisible(false);
+                    if (!isWorkoutCompleted) {
+                      setSelectedExercises((prev) => {
+                        if (prev.includes(exerciseIdStr)) {
+                          return prev.filter((id) => id !== exerciseIdStr);
+                        } else {
+                          return [...prev, exerciseIdStr];
+                        }
+                      });
+                    }
                   }}
+                  disabled={isWorkoutCompleted}
                 >
                   <Text
                     style={[
-                      styles.pickerItemText,
-                      selectedExercise === item.id.toString() && styles.pickerItemTextSelected,
+                      styles.exerciseListItemText,
+                      isSelected && styles.exerciseListItemTextSelected,
                     ]}
                   >
                     {item.name}
                   </Text>
-                  {selectedExercise === item.id.toString() && (
-                    <MaterialIcons name="check" size={20} color="#4CAF50" />
+                  {isSelected && (
+                    <MaterialIcons
+                      name="check-circle"
+                      size={20}
+                      color={themeColors.accent.success}
+                    />
                   )}
                 </TouchableOpacity>
-              )}
-              ListEmptyComponent={
-                <View style={styles.emptyPickerContainer}>
-                  <Text style={styles.emptyPickerText}>No exercises available</Text>
-                </View>
-              }
-            />
+              );
+            }}
+            contentContainerStyle={styles.exerciseListContent}
+            ListEmptyComponent={
+              <View style={styles.emptyExerciseList}>
+                <Text style={styles.emptyExerciseListText}>
+                  No exercises available in {formatCategoryName(selectedCategory).toLowerCase()}
+                </Text>
+              </View>
+            }
+          />
+
+          {/* Add Button */}
+          <View style={styles.addButtonContainer}>
+            <TouchableOpacity
+              style={[
+                styles.addExerciseButtonModal,
+                (selectedExercises.length === 0 || isWorkoutCompleted) && styles.addExerciseButtonModalDisabled,
+              ]}
+              onPress={handleAddExercise}
+              disabled={selectedExercises.length === 0 || isWorkoutCompleted}
+            >
+              <Text style={styles.addExerciseButtonText}>
+                {selectedExercises.length === 0
+                  ? 'Add Exercise'
+                  : `Add ${selectedExercises.length} Exercise${selectedExercises.length > 1 ? 's' : ''}`}
+              </Text>
+            </TouchableOpacity>
           </View>
-        </TouchableOpacity>
-      </Modal>
+        </View>
+      </BottomDrawer>
+
     </View>
   );
 };
@@ -820,8 +875,35 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   emptyText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  emptySubtext: {
     color: '#999',
+    fontSize: 14,
+    marginBottom: 24,
+    textAlign: 'center',
+  },
+  addExerciseEmptyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#4CAF50',
+    borderRadius: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    gap: 8,
+  },
+  addExerciseEmptyButtonDisabled: {
+    backgroundColor: '#333',
+    opacity: 0.5,
+  },
+  addExerciseEmptyButtonText: {
+    color: '#fff',
     fontSize: 16,
+    fontWeight: '600',
   },
   footer: {
     padding: 16,
@@ -844,142 +926,94 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  addExerciseModalContainer: {
-    backgroundColor: '#2a2a2a',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingTop: 20,
-    paddingBottom: 40,
-    maxHeight: '80%',
-    width: '100%',
-    position: 'absolute',
-    bottom: 0,
-  },
-  addExerciseModalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#444',
-  },
-  addExerciseModalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#fff',
-  },
-  closeButton: {
-    padding: 4,
-  },
   addExerciseModalContent: {
-    padding: 20,
+    flex: 1,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
   },
-  pickerContainer: {
-    marginBottom: 24,
+  categoryPillsContainer: {
+    marginBottom: spacing.md,
   },
-  pickerLabel: {
-    fontSize: 14,
-    color: '#999',
-    marginBottom: 8,
-    fontWeight: '500',
+  categoryPillsScrollContent: {
+    paddingRight: spacing.md,
+    gap: spacing.sm,
   },
-  pickerWrapper: {
-    backgroundColor: '#333',
-    borderRadius: 8,
+  categoryPill: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.lg,
+    backgroundColor: themeColors.background.surface,
     borderWidth: 1,
-    borderColor: '#444',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 14,
+    borderColor: themeColors.border.default,
+    marginRight: spacing.sm,
   },
-  pickerWrapperDisabled: {
-    opacity: 0.5,
+  categoryPillActive: {
+    backgroundColor: themeColors.primary.main,
+    borderColor: themeColors.primary.main,
   },
-  pickerText: {
+  categoryPillText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: themeColors.text.secondary,
+  },
+  categoryPillTextActive: {
     color: '#fff',
-    fontSize: 16,
-    flex: 1,
-  },
-  pickerTextPlaceholder: {
-    color: '#666',
-  },
-  pickerModalContainer: {
-    backgroundColor: '#2a2a2a',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingTop: 20,
-    height: '70%',
-    width: '100%',
-    position: 'absolute',
-    bottom: 0,
-  },
-  pickerFlatList: {
-    flex: 1,
-  },
-  pickerFlatListContent: {
-    paddingBottom: 20,
-  },
-  pickerModalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#444',
-  },
-  pickerModalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#fff',
-  },
-  pickerItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#333',
-  },
-  pickerItemSelected: {
-    backgroundColor: '#333',
-  },
-  pickerItemText: {
-    color: '#fff',
-    fontSize: 16,
-    flex: 1,
-  },
-  pickerItemTextSelected: {
-    color: '#4CAF50',
     fontWeight: '600',
   },
-  emptyPickerContainer: {
-    padding: 40,
+  exerciseListContent: {
+    paddingBottom: spacing.md,
+  },
+  exerciseListItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    backgroundColor: themeColors.background.surface,
+    borderRadius: borderRadius.md,
+    marginBottom: spacing.sm,
+    borderWidth: 1,
+    borderColor: themeColors.border.default,
+  },
+  exerciseListItemSelected: {
+    backgroundColor: themeColors.background.elevated,
+    borderColor: themeColors.primary.main,
+    borderWidth: 2,
+  },
+  exerciseListItemText: {
+    fontSize: 16,
+    color: themeColors.text.primary,
+    flex: 1,
+  },
+  exerciseListItemTextSelected: {
+    color: themeColors.text.primary,
+    fontWeight: '600',
+  },
+  emptyExerciseList: {
+    padding: spacing.xl,
     alignItems: 'center',
   },
-  emptyPickerText: {
-    color: '#999',
-    fontSize: 16,
+  emptyExerciseListText: {
+    color: themeColors.text.muted,
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  addButtonContainer: {
+    paddingVertical: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: themeColors.border.default,
+    backgroundColor: themeColors.background.secondary,
+    marginHorizontal: -spacing.md,
+    paddingHorizontal: spacing.md,
   },
   addExerciseButtonModal: {
-    backgroundColor: '#4CAF50',
-    borderRadius: 8,
-    padding: 16,
+    backgroundColor: themeColors.primary.main,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
     alignItems: 'center',
-    marginTop: 8,
   },
   addExerciseButtonModalDisabled: {
-    backgroundColor: '#333',
+    backgroundColor: themeColors.background.surface,
     opacity: 0.5,
   },
   addExerciseButtonText: {

@@ -62,6 +62,21 @@ export const workoutService = {
     }
   },
 
+  async getLatestWorkout(): Promise<any> {
+    try {
+      const response = await apiClient.get<any>(
+        endpoints.WORKOUT_INSTANCES.LATEST
+      );
+      return response;
+    } catch (error: any) {
+      // If it's a 404, return null to indicate no workout found
+      if (error.status === 404 || error.response?.status === 404) {
+        return null;
+      }
+      throw new Error(error.message || 'Failed to fetch latest workout');
+    }
+  },
+
   async createPlanInstance(planId: number, mesocycleId?: number, iterationNumber?: number): Promise<any> {
     try {
       const response = await apiClient.post<any>(
@@ -158,11 +173,13 @@ export const workoutService = {
     }
   },
 
-  async addExercise(workoutInstanceId: number, exerciseId: number): Promise<any> {
+  async addExercise(workoutInstanceId: number, exerciseIds: number | number[]): Promise<any> {
     try {
+      // Normalize to array format for backend
+      const exerciseIdArray = Array.isArray(exerciseIds) ? exerciseIds : [exerciseIds];
       const response = await apiClient.post<any>(
         endpoints.WORKOUT_INSTANCES.EXERCISES(workoutInstanceId),
-        { exerciseId }
+        { exerciseId: exerciseIdArray }
       );
       return response;
     } catch (error: any) {
@@ -190,6 +207,18 @@ export const workoutService = {
       );
     } catch (error: any) {
       throw new Error(error.message || 'Failed to reorder exercise');
+    }
+  },
+
+  async createStandaloneWorkout(name?: string): Promise<WorkoutInstance> {
+    try {
+      const response = await apiClient.post<WorkoutInstance>(
+        endpoints.WORKOUT_INSTANCES.LIST,
+        name ? { name } : {}
+      );
+      return response;
+    } catch (error: any) {
+      throw new Error(error.message || 'Failed to create standalone workout');
     }
   },
 };

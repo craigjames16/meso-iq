@@ -31,8 +31,12 @@ export const plansService = {
 
   async createPlan(data: { name: string; days: any[] }): Promise<Plan> {
     try {
-      const response = await apiClient.post<Plan>(API_ENDPOINTS.PLANS.LIST, data);
-      return response;
+      const response = await apiClient.post<{ plan: Plan } | Plan>(API_ENDPOINTS.PLANS.LIST, data);
+      // Handle both wrapped { plan } response and direct Plan response
+      if (response && typeof response === 'object' && 'plan' in response) {
+        return (response as { plan: Plan }).plan;
+      }
+      return response as Plan;
     } catch (error: any) {
       console.error('Error creating plan:', error);
       throw new Error(error.message || 'Failed to create plan');

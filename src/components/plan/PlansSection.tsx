@@ -22,7 +22,7 @@ export interface PlansSectionRef {
   openCreateDialog: () => void;
 }
 
-type PlansSectionNavigationProp = NativeStackNavigationProp<RootStackParamList, 'PlanDetail'>;
+type PlansSectionNavigationProp = NativeStackNavigationProp<RootStackParamList, 'PlanDetail' | 'EditPlan'>;
 
 export const PlansSection = forwardRef<PlansSectionRef>((props, ref) => {
   const navigation = useNavigation<PlansSectionNavigationProp>();
@@ -47,7 +47,12 @@ export const PlansSection = forwardRef<PlansSectionRef>((props, ref) => {
       setLoading(true);
       setError(null);
       const data = await plansService.getPlans();
-      setPlans(data);
+      // Normalize plans to ensure days is always an array
+      const normalizedPlans = data.map(plan => ({
+        ...plan,
+        days: plan.days || [],
+      }));
+      setPlans(normalizedPlans);
     } catch (err: any) {
       console.error('Failed to fetch plans', err);
       setError(err.message || 'Failed to load plans');
@@ -66,9 +71,16 @@ export const PlansSection = forwardRef<PlansSectionRef>((props, ref) => {
         name: newPlanName.trim(),
         days: [],
       });
-      setPlans(prev => [newPlan, ...prev]);
+      // Ensure days is always an array
+      const normalizedPlan = {
+        ...newPlan,
+        days: newPlan.days || [],
+      };
+      setPlans(prev => [normalizedPlan, ...prev]);
       setModalVisible(false);
       setNewPlanName('');
+      // Navigate to edit plan screen
+      navigation.navigate('EditPlan', { planId: normalizedPlan.id });
     } catch (err: any) {
       console.error('Failed to create plan', err);
       setError(err.message || 'Failed to create plan');
@@ -110,7 +122,7 @@ export const PlansSection = forwardRef<PlansSectionRef>((props, ref) => {
               size={16}
               color={themeColors.text.secondary}
             />
-            <Text style={styles.cardSubtext}>{item.days.length} days</Text>
+            <Text style={styles.cardSubtext}>{item.days?.length ?? 0} days</Text>
           </View>
           <View style={styles.cardFooter}>
             {hasActiveInstance && (

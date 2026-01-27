@@ -61,8 +61,9 @@ class ApiClient {
         errorData.message = text;
       }
 
+      const errorMessage = errorData.message || errorData.error || 'An error occurred';
       const error: ApiError = {
-        message: errorData.message || errorData.error || 'An error occurred',
+        message: errorMessage,
         status: response.status,
       };
 
@@ -72,7 +73,11 @@ class ApiClient {
         throw new Error('Unauthorized - Please sign in again');
       }
 
-      throw error;
+      // Throw as Error instance so it can be caught properly
+      const errorInstance = new Error(errorMessage);
+      (errorInstance as any).status = response.status;
+      (errorInstance as any).errorData = errorData;
+      throw errorInstance;
     }
 
     // Handle successful response

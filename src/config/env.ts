@@ -36,6 +36,7 @@ export const API_ENDPOINTS = {
   },
   WORKOUT_INSTANCES: {
     LIST: '/api/workout-instances',
+    LATEST: '/api/workout-instances/latest',
     GET: (id: number) => `/api/workout-instances/${id}`,
     COMPLETE: (id: number) => `/api/workout-instances/${id}/complete`,
     SETS: (id: number) => `/api/workout-instances/${id}/sets`,
