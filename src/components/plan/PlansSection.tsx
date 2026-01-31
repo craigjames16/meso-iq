@@ -180,6 +180,7 @@ export const PlansSection = forwardRef<PlansSectionRef>((props, ref) => {
         visible={modalVisible}
         onClose={() => setModalVisible(false)}
         title="Create New Plan"
+        height="50%"
       >
         <View style={styles.drawerContent}>
           {/* AI Create Option */}
@@ -371,6 +372,7 @@ const styles = StyleSheet.create({
   },
   drawerContent: {
     padding: spacing.md,
+    paddingBottom: spacing.xl * 2,
   },
   inputLabel: {
     color: themeColors.text.primary,

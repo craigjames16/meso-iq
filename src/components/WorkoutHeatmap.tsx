@@ -20,6 +20,7 @@ import { apiClient } from '../api/client';
 import { endpoints } from '../api/endpoints';
 import { workoutService } from '../services/workoutService';
 import { themeColors, borderRadius, spacing } from '../theme/colors';
+import { useSchedule } from '../context/ScheduleContext';
 
 // Register echarts components
 echarts.use([
@@ -54,7 +55,7 @@ export const WorkoutHeatmap: React.FC<WorkoutHeatmapProps> = ({ mesocycleId = nu
   const [hasData, setHasData] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [currentMesocycleId, setCurrentMesocycleId] = useState<number | null>(mesocycleId);
-  const [schedule, setSchedule] = useState<any>(null);
+  const { schedule } = useSchedule();
 
   const selectedYear = selectedDate.getFullYear();
   const yearRange = useMemo(() => {
@@ -97,21 +98,6 @@ export const WorkoutHeatmap: React.FC<WorkoutHeatmapProps> = ({ mesocycleId = nu
     fetchCurrentMesocycle();
   }, [currentMesocycleId]);
 
-  // Fetch schedule data for upcoming days
-  useEffect(() => {
-    const fetchSchedule = async () => {
-      if (!currentMesocycleId) return;
-      
-      try {
-        const data = await workoutService.getSchedule(currentMesocycleId);
-        setSchedule(data);
-      } catch (err) {
-        console.error('Error fetching schedule:', err);
-      }
-    };
-    
-    fetchSchedule();
-  }, [currentMesocycleId]);
 
   useEffect(() => {
     const fetchData = async () => {

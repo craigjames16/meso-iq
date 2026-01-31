@@ -6,8 +6,9 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 import { workoutService } from '../services/workoutService';
-import { ScheduleData, PlanInstanceDay } from '../types/workout';
+import { PlanInstanceDay } from '../types/workout';
 import { themeColors, spacing, borderRadius } from '../theme/colors';
+import { useSchedule } from '../context/ScheduleContext';
 
 interface WorkoutCalendarProps {
   mesocycleId: number | null;
@@ -17,35 +18,12 @@ type WorkoutCalendarNavigationProp = NativeStackNavigationProp<RootStackParamLis
 
 export const WorkoutCalendar: React.FC<WorkoutCalendarProps> = ({ mesocycleId }) => {
   const navigation = useNavigation<WorkoutCalendarNavigationProp>();
-  const [schedule, setSchedule] = useState<ScheduleData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { schedule, loading, error, refreshSchedule } = useSchedule();
   const [selectedDay, setSelectedDay] = useState<{ date: string; day: PlanInstanceDay | null } | null>(null);
   const [isStartingWorkout, setIsStartingWorkout] = useState(false);
   const [touchPosition, setTouchPosition] = useState<{ x: number; y: number } | null>(null);
   const calendarWrapperRef = useRef<View>(null);
   const lastTouchRef = useRef<{ x: number; y: number } | null>(null);
-
-  useEffect(() => {
-    const fetchSchedule = async () => {
-      if (!mesocycleId) {
-        setLoading(false);
-        return;
-      }
-
-      try {
-        const data = await workoutService.getSchedule(mesocycleId);
-        setSchedule(data);
-      } catch (err) {
-        console.error('Error fetching schedule:', err);
-        setError(err instanceof Error ? err.message : 'Failed to fetch schedule');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchSchedule();
-  }, [mesocycleId]);
 
   // Process completed workouts and create map
   const { completedDates, completedDatesMap } = useMemo(() => {
@@ -177,7 +155,8 @@ export const WorkoutCalendar: React.FC<WorkoutCalendarProps> = ({ mesocycleId })
     textDayHeaderFontSize: 13,
   };
 
-  if (loading) {
+  // Only show loading/error if we have a mesocycleId and schedule is being fetched
+  if (mesocycleId && loading) {
     return (
       <View style={styles.container}>
         <View style={styles.loadingContainer}>
@@ -187,11 +166,12 @@ export const WorkoutCalendar: React.FC<WorkoutCalendarProps> = ({ mesocycleId })
     );
   }
 
-  if (error) {
+  if (mesocycleId && error) {
     return null; // Silently fail - don't show error in calendar
   }
 
-  if (!schedule) {
+  // If no mesocycleId or schedule, don't show the calendar
+  if (!mesocycleId || !schedule) {
     return null;
   }
 
@@ -245,10 +225,7 @@ export const WorkoutCalendar: React.FC<WorkoutCalendarProps> = ({ mesocycleId })
         if (day.planInstanceId && day.id) {
           await workoutService.completeRestDay(day.planInstanceId, day.id);
           // Refresh schedule
-          if (mesocycleId) {
-            const data = await workoutService.getSchedule(mesocycleId);
-            setSchedule(data);
-          }
+          await refreshSchedule();
         }
         setSelectedDay(null);
         setTouchPosition(null);

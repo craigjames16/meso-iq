@@ -7,7 +7,6 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
-  FlatList,
 } from 'react-native';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -16,10 +15,13 @@ import { workoutService } from '../../services/workoutService';
 import type { RootStackParamList } from '../../navigation/AppNavigator';
 import { ExerciseTrackingCard, type ExerciseTracking, type ExerciseSet } from '../../components/ExerciseTrackingCard';
 import type { HistoryInstance } from '../../components/ExerciseHistoryModal';
-import { BottomDrawer } from '../../components/BottomDrawer';
 import { DropdownMenu, type DropdownMenuItem } from '../../components/DropdownMenu';
 import { ConfirmationModal } from '../../components/ConfirmationModal';
+import { AddExerciseModal } from '../../components/plan/AddExerciseModal';
+import { exercisesService } from '../../services/exercisesService';
+import { ExerciseListItem } from '../../types/plan';
 import { themeColors, spacing, borderRadius } from '../../theme/colors';
+import { useSchedule } from '../../context/ScheduleContext';
 
 // Categories will be extracted from backend response
 
@@ -30,6 +32,7 @@ export const WorkoutDetailScreen: React.FC = () => {
   const route = useRoute<WorkoutDetailScreenRouteProp>();
   const navigation = useNavigation<WorkoutDetailScreenNavigationProp>();
   const { workoutInstanceId } = route.params;
+  const { refreshSchedule } = useSchedule();
 
   const [workoutInstance, setWorkoutInstance] = useState<any>(null);
   const [exerciseTrackings, setExerciseTrackings] = useState<ExerciseTracking[]>([]);
@@ -39,10 +42,8 @@ export const WorkoutDetailScreen: React.FC = () => {
   const [addExerciseModalVisible, setAddExerciseModalVisible] = useState(false);
   const [menuVisible, setMenuVisible] = useState(false);
   const [endWorkoutConfirmVisible, setEndWorkoutConfirmVisible] = useState(false);
-  const [availableExercises, setAvailableExercises] = useState<any[]>([]);
-  const [availableCategories, setAvailableCategories] = useState<string[]>(['ALL']);
-  const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
-  const [selectedExercises, setSelectedExercises] = useState<string[]>([]);
+  const [availableExercises, setAvailableExercises] = useState<ExerciseListItem[]>([]);
+  const [creatingExercise, setCreatingExercise] = useState(false);
 
   useEffect(() => {
     fetchWorkoutData();
@@ -58,31 +59,21 @@ export const WorkoutDetailScreen: React.FC = () => {
 
       setWorkoutInstance(workoutData);
       
-      let exercisesArray: any[] = [];
+      // Transform exercises data to ExerciseListItem[] format
+      let exercisesArray: ExerciseListItem[] = [];
       
-      // Handle different response formats
-      let categoriesFromBackend: string[] = [];
-      
-      // Check if response is empty object
       if (exercisesData && typeof exercisesData === 'object' && Object.keys(exercisesData).length === 0) {
         setAvailableExercises([]);
-        setAvailableCategories(['ALL']);
       } else if (Array.isArray(exercisesData)) {
         // If it's already an array, normalize categories to uppercase
         exercisesArray = exercisesData.map((exercise: any) => ({
           ...exercise,
           category: (exercise.category || '').toUpperCase(),
+          highestWeight: exercise.highestWeight || 0,
         }));
-        categoriesFromBackend = [...new Set(exercisesArray.map((ex: any) => ex.category).filter(Boolean))].sort();
         setAvailableExercises(exercisesArray);
-        setAvailableCategories(['ALL', ...categoriesFromBackend]);
       } else if (typeof exercisesData === 'object' && exercisesData !== null) {
-        // If it's an object with categories, flatten it and extract categories from keys
-        categoriesFromBackend = Object.keys(exercisesData)
-          .map(cat => cat.toUpperCase())
-          .filter(Boolean)
-          .sort();
-        
+        // If it's an object with categories, flatten it
         exercisesArray = Object.entries(exercisesData).flatMap(([category, exerciseList]: [string, any]) => {
           if (!Array.isArray(exerciseList)) {
             console.warn(`Exercise list for category ${category} is not an array:`, exerciseList);
@@ -92,16 +83,13 @@ export const WorkoutDetailScreen: React.FC = () => {
             ...exercise,
             // Prefer exercise's own category property, fall back to object key, normalize to uppercase
             category: (exercise.category || category || '').toUpperCase(),
+            highestWeight: exercise.highestWeight || 0,
           }));
         });
-        
         setAvailableExercises(exercisesArray);
-        // Set available categories from backend, with 'ALL' as first option
-        setAvailableCategories(['ALL', ...categoriesFromBackend]);
       } else {
         console.warn('Unexpected exercises data format:', typeof exercisesData, exercisesData);
         setAvailableExercises([]);
-        setAvailableCategories(['ALL']);
       }
       
       // Get current mesocycle ID from workout data
@@ -233,27 +221,58 @@ export const WorkoutDetailScreen: React.FC = () => {
   };
 
   const handleSetCompletion = async (exerciseIndex: number, setIndex: number, completed: boolean) => {
-    try {
-      const tracking = exerciseTrackings[exerciseIndex];
-      const set = tracking.sets[setIndex];
+    const tracking = exerciseTrackings[exerciseIndex];
+    const set = tracking.sets[setIndex];
 
-      if (!completed && set.id) {
-        // Delete set
-        await workoutService.deleteSet(workoutInstanceId, [set.id]);
+    if (!completed && set.id) {
+      // Delete set - optimistic update
       setExerciseTrackings((prev: ExerciseTracking[]) => {
         const updated = [...prev];
         updated[exerciseIndex].sets[setIndex] = {
           ...updated[exerciseIndex].sets[setIndex],
           id: undefined,
           completed: false,
+          loading: false,
         };
         return updated;
       });
-      } else if (completed) {
-        // Add set
-        const weightToUse = set.weight || set.lastSet?.weight || 0;
-        const repsToUse = set.reps || set.lastSet?.reps || 0;
 
+      try {
+        await workoutService.deleteSet(workoutInstanceId, [set.id]);
+      } catch (err) {
+        console.error('Error in handleSetCompletion:', err);
+        // Revert on error
+        setExerciseTrackings((prev: ExerciseTracking[]) => {
+          const updated = [...prev];
+          updated[exerciseIndex].sets[setIndex] = {
+            ...updated[exerciseIndex].sets[setIndex],
+            id: set.id,
+            completed: true,
+            loading: false,
+          };
+          return updated;
+        });
+        Alert.alert('Error', err instanceof Error ? err.message : 'Failed to delete set');
+      }
+    } else if (completed) {
+      // Add set - optimistic update
+      const weightToUse = set.weight || set.lastSet?.weight || 0;
+      const repsToUse = set.reps || set.lastSet?.reps || 0;
+
+      // Optimistically mark as completed and loading
+      setExerciseTrackings((prev) => {
+        const updated = [...prev];
+        updated[exerciseIndex].sets[setIndex] = {
+          ...updated[exerciseIndex].sets[setIndex],
+          completed: true,
+          loading: true,
+          weight: weightToUse,
+          reps: repsToUse,
+        };
+        return updated;
+      });
+
+      try {
         const response = await workoutService.addSet(
           workoutInstanceId,
           tracking.exerciseId,
@@ -263,21 +282,32 @@ export const WorkoutDetailScreen: React.FC = () => {
         );
 
         const newSetId = response[0]?.id;
+        // Update with actual ID and remove loading
         setExerciseTrackings((prev) => {
           const updated = [...prev];
           updated[exerciseIndex].sets[setIndex] = {
             ...updated[exerciseIndex].sets[setIndex],
             id: newSetId,
             completed: true,
-            weight: weightToUse,
-            reps: repsToUse,
+            loading: false,
           };
           return updated;
         });
+      } catch (err) {
+        console.error('Error in handleSetCompletion:', err);
+        // Revert on error
+        setExerciseTrackings((prev) => {
+          const updated = [...prev];
+          updated[exerciseIndex].sets[setIndex] = {
+            ...updated[exerciseIndex].sets[setIndex],
+            completed: false,
+            loading: false,
+            id: undefined,
+          };
+          return updated;
+        });
+        Alert.alert('Error', err instanceof Error ? err.message : 'Failed to update set');
       }
-    } catch (err) {
-      console.error('Error in handleSetCompletion:', err);
-      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to update set');
     }
   };
 
@@ -294,6 +324,15 @@ export const WorkoutDetailScreen: React.FC = () => {
             }
           : null
       );
+      
+      // Refresh schedule to update the calendar and other components
+      try {
+        await refreshSchedule();
+      } catch (scheduleError) {
+        // Don't fail the workout completion if schedule refresh fails
+        console.error('Error refreshing schedule:', scheduleError);
+      }
+      
       Alert.alert('Success', 'Workout completed!', [
         {
           text: 'OK',
@@ -399,14 +438,67 @@ export const WorkoutDetailScreen: React.FC = () => {
     });
   };
 
-  const handleAddExercise = async () => {
-    if (selectedExercises.length === 0) {
-      Alert.alert('Error', 'Please select at least one exercise');
-      return;
+  const addExerciseToTracking = (workoutData: any, exercise: ExerciseListItem, currentMesocycleId: number | null) => {
+    // Find the newly added exercise in workout data
+    const newExercise = workoutData.workoutExercises.find(
+      (ex: any) => ex.exercise.id === exercise.id
+    );
+
+    if (!newExercise) {
+      return null;
     }
 
+    // Get all workout instances for this exercise (history)
+    const history: HistoryInstance[] = exercise.workoutInstances
+      ?.filter((instance: any) => instance.completedAt)
+      ?.map((instance: any) => ({
+        workoutInstanceId: instance.workoutInstanceId,
+        volume: instance.volume,
+        completedAt: instance.completedAt,
+        sets: instance.sets || [],
+      })) || [];
+    
+    // Filter mesocycle-specific history
+    const mesocycleHistory: HistoryInstance[] = exercise.workoutInstances
+      ?.filter((instance: any) => 
+        instance.mesocycleId === currentMesocycleId && 
+        instance.workoutInstanceId !== workoutData.id &&
+        instance.completedAt
+      )
+      ?.sort((a: any, b: any) => 
+        new Date(a.completedAt).getTime() - new Date(b.completedAt).getTime()
+      )
+      ?.map((instance: any) => ({
+        workoutInstanceId: instance.workoutInstanceId,
+        volume: instance.volume,
+        completedAt: instance.completedAt,
+        sets: instance.sets || [],
+      })) || [];
+
+    const numSets = newExercise.lastSets?.length || 3;
+    return {
+      exerciseId: newExercise.exercise.id,
+      exerciseName: newExercise.exercise.name,
+      order: newExercise.order,
+      sets: Array.from({ length: numSets }, (_, index) => {
+        const matchingLastSet = newExercise.lastSets?.find(
+          (lastSet: any) => lastSet.setNumber === index + 1
+        );
+        return {
+          reps: 0,
+          weight: 0,
+          setNumber: index + 1,
+          lastSet: matchingLastSet || null,
+        };
+      }),
+      history,
+      mesocycleHistory,
+    } as ExerciseTracking;
+  };
+
+  const handleSelectExercises = async (exercises: ExerciseListItem[]) => {
     try {
-      const exerciseIds = selectedExercises.map((id) => parseInt(id));
+      const exerciseIds = exercises.map((ex) => ex.id);
       const workoutData = await workoutService.addExercise(workoutInstanceId, exerciseIds);
       setWorkoutInstance(workoutData);
 
@@ -415,68 +507,8 @@ export const WorkoutDetailScreen: React.FC = () => {
         workoutData.planInstanceDays?.[0]?.planInstance?.mesocycle?.id;
 
       // Process all newly added exercises
-      const newExerciseTrackings: ExerciseTracking[] = exerciseIds
-        .map((exerciseId) => {
-          const newExercise = workoutData.workoutExercises.find(
-            (ex: any) => ex.exercise.id === exerciseId
-          );
-
-          if (!newExercise) {
-            return null;
-          }
-
-          // Find the exercise to get history data
-          const currentExercise = availableExercises.find(
-            (ex: any) => ex.id === exerciseId
-          );
-          
-          // Get all workout instances for this exercise (history)
-          const history: HistoryInstance[] = currentExercise?.workoutInstances
-            ?.filter((instance: any) => instance.completedAt)
-            ?.map((instance: any) => ({
-              workoutInstanceId: instance.workoutInstanceId,
-              volume: instance.volume,
-              completedAt: instance.completedAt,
-              sets: instance.sets || [],
-            })) || [];
-          
-          // Filter mesocycle-specific history
-          const mesocycleHistory: HistoryInstance[] = currentExercise?.workoutInstances
-            ?.filter((instance: any) => 
-              instance.mesocycleId === currentMesocycleId && 
-              instance.workoutInstanceId !== workoutData.id &&
-              instance.completedAt
-            )
-            ?.sort((a: any, b: any) => 
-              new Date(a.completedAt).getTime() - new Date(b.completedAt).getTime()
-            )
-            ?.map((instance: any) => ({
-              workoutInstanceId: instance.workoutInstanceId,
-              volume: instance.volume,
-              completedAt: instance.completedAt,
-              sets: instance.sets || [],
-            })) || [];
-
-          const numSets = newExercise.lastSets?.length || 3;
-          return {
-            exerciseId: newExercise.exercise.id,
-            exerciseName: newExercise.exercise.name,
-            order: newExercise.order,
-            sets: Array.from({ length: numSets }, (_, index) => {
-              const matchingLastSet = newExercise.lastSets?.find(
-                (lastSet: any) => lastSet.setNumber === index + 1
-              );
-              return {
-                reps: 0,
-                weight: 0,
-                setNumber: index + 1,
-                lastSet: matchingLastSet || null,
-              };
-            }),
-            history,
-            mesocycleHistory,
-          } as ExerciseTracking;
-        })
+      const newExerciseTrackings: ExerciseTracking[] = exercises
+        .map((exercise) => addExerciseToTracking(workoutData, exercise, currentMesocycleId))
         .filter((tracking): tracking is ExerciseTracking => tracking !== null);
 
       setExerciseTrackings((prev) => {
@@ -484,64 +516,63 @@ export const WorkoutDetailScreen: React.FC = () => {
         return updated.sort((a, b) => a.order - b.order);
       });
 
-      setSelectedExercises([]);
-      setSelectedCategory('ALL');
       setAddExerciseModalVisible(false);
     } catch (err: any) {
-      console.error('Error adding exercise:', err);
+      console.error('Error adding exercises:', err);
       
       // Extract error message - check multiple possible locations
-      const errorMessage = err?.message || err?.error || err?.errorData?.message || 'Failed to add exercise';
+      const errorMessage = err?.message || err?.error || err?.errorData?.message || 'Failed to add exercises';
       
-      // Check if it's the specific "already added" error (409 status or message contains "already")
-      const isAlreadyAddedError = err?.status === 409 || 
-                                  errorMessage.toLowerCase().includes('already') || 
-                                  errorMessage.toLowerCase().includes('already in this workout');
+      Alert.alert('Error', errorMessage);
+    }
+  };
+
+  const handleCreateExercise = async (name: string, category: string) => {
+    try {
+      setCreatingExercise(true);
+      const newExercise = await exercisesService.createExercise({ name, category });
       
-      if (isAlreadyAddedError) {
-        Alert.alert('Exercise Already Added', errorMessage);
-      } else {
-        Alert.alert('Error', errorMessage);
+      // Refresh exercises list
+      const exercisesData = await workoutService.getExercises();
+      
+      // Transform exercises data to ExerciseListItem[] format
+      let exercisesArray: ExerciseListItem[] = [];
+      
+      if (Array.isArray(exercisesData)) {
+        exercisesArray = exercisesData.map((exercise: any) => ({
+          ...exercise,
+          category: (exercise.category || '').toUpperCase(),
+          highestWeight: exercise.highestWeight || 0,
+        }));
+      } else if (typeof exercisesData === 'object' && exercisesData !== null) {
+        exercisesArray = Object.entries(exercisesData).flatMap(([category, exerciseList]: [string, any]) => {
+          if (!Array.isArray(exerciseList)) {
+            return [];
+          }
+          return exerciseList.map((exercise: any) => ({
+            ...exercise,
+            category: (exercise.category || category || '').toUpperCase(),
+            highestWeight: exercise.highestWeight || 0,
+          }));
+        });
       }
+      
+      setAvailableExercises(exercisesArray);
+      
+      // Auto-select the newly created exercise
+      const exerciseToSelect = exercisesArray.find((ex) => ex.id === newExercise.id);
+      if (exerciseToSelect) {
+        await handleSelectExercises([exerciseToSelect]);
+      }
+    } catch (err: any) {
+      console.error('Failed to create exercise', err);
+      Alert.alert('Error', err.message || 'Failed to create exercise');
+      throw err;
+    } finally {
+      setCreatingExercise(false);
     }
   };
 
-  const getCategories = () => {
-    // Use categories from backend response
-    console.log('Available categories from state:', availableCategories);
-    return availableCategories;
-  };
-
-  const formatCategoryName = (category: string) => {
-    if (category === 'ALL') return 'All Categories';
-    return category.charAt(0) + category.slice(1).toLowerCase();
-  };
-
-  const getFilteredExercises = () => {
-    let filtered;
-    if (selectedCategory === 'ALL') {
-      filtered = availableExercises;
-    } else {
-      // Case-insensitive category matching
-      filtered = availableExercises.filter((ex) => {
-        const exCategory = ex.category ? ex.category.toUpperCase() : '';
-        const selectedCat = selectedCategory.toUpperCase();
-        const matches = exCategory === selectedCat;
-        if (!matches && exCategory) {
-          console.log(`Exercise "${ex.name}" category "${exCategory}" doesn't match selected "${selectedCat}"`);
-        }
-        return matches;
-      });
-    }
-    console.log('Filtered exercises for category', selectedCategory, ':', filtered.length);
-    console.log('Available exercises total:', availableExercises.length);
-    console.log('Selected category:', selectedCategory);
-    console.log('Available categories:', availableCategories);
-    if (filtered.length === 0 && availableExercises.length > 0) {
-      console.log('Sample exercise categories:', availableExercises.slice(0, 5).map(ex => ({ name: ex.name, category: ex.category })));
-    }
-    return filtered;
-  };
 
   if (loading) {
     return (
@@ -613,7 +644,7 @@ export const WorkoutDetailScreen: React.FC = () => {
         ) : (
           exerciseTrackings.map((exercise, exerciseIndex) => (
             <ExerciseTrackingCard
-              key={exercise.exerciseId}
+              key={`${exercise.exerciseId}-${exerciseIndex}`}
               exercise={exercise}
               exerciseIndex={exerciseIndex}
               workoutInstanceId={workoutInstanceId}
@@ -696,122 +727,16 @@ export const WorkoutDetailScreen: React.FC = () => {
       />
 
       {/* Add Exercise Modal */}
-      <BottomDrawer
+      <AddExerciseModal
         visible={addExerciseModalVisible}
         onClose={() => {
           setAddExerciseModalVisible(false);
-          setSelectedExercises([]);
-          setSelectedCategory('ALL');
         }}
-        title="Add Exercise"
-        height="80%"
-      >
-        <View style={styles.addExerciseModalContent}>
-          {/* Category Pills */}
-          <View style={styles.categoryPillsContainer}>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.categoryPillsScrollContent}
-            >
-              {getCategories().map((cat) => (
-                <TouchableOpacity
-                  key={cat}
-                  style={[
-                    styles.categoryPill,
-                    selectedCategory === cat && styles.categoryPillActive,
-                  ]}
-                  onPress={() => {
-                    setSelectedCategory(cat);
-                    setSelectedExercises([]); // Reset exercise selection when category changes
-                  }}
-                >
-                  <Text
-                    style={[
-                      styles.categoryPillText,
-                      selectedCategory === cat && styles.categoryPillTextActive,
-                    ]}
-                  >
-                    {formatCategoryName(cat)}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-
-          {/* Exercise List */}
-          <FlatList
-            data={getFilteredExercises()}
-            keyExtractor={(item) => item.id.toString()}
-            renderItem={({ item }) => {
-              const exerciseIdStr = item.id.toString();
-              const isSelected = selectedExercises.includes(exerciseIdStr);
-              return (
-                <TouchableOpacity
-                  style={[
-                    styles.exerciseListItem,
-                    isSelected && styles.exerciseListItemSelected,
-                  ]}
-                  onPress={() => {
-                    if (!isWorkoutCompleted) {
-                      setSelectedExercises((prev) => {
-                        if (prev.includes(exerciseIdStr)) {
-                          return prev.filter((id) => id !== exerciseIdStr);
-                        } else {
-                          return [...prev, exerciseIdStr];
-                        }
-                      });
-                    }
-                  }}
-                  disabled={isWorkoutCompleted}
-                >
-                  <Text
-                    style={[
-                      styles.exerciseListItemText,
-                      isSelected && styles.exerciseListItemTextSelected,
-                    ]}
-                  >
-                    {item.name}
-                  </Text>
-                  {isSelected && (
-                    <MaterialIcons
-                      name="check-circle"
-                      size={20}
-                      color={themeColors.accent.success}
-                    />
-                  )}
-                </TouchableOpacity>
-              );
-            }}
-            contentContainerStyle={styles.exerciseListContent}
-            ListEmptyComponent={
-              <View style={styles.emptyExerciseList}>
-                <Text style={styles.emptyExerciseListText}>
-                  No exercises available in {formatCategoryName(selectedCategory).toLowerCase()}
-                </Text>
-              </View>
-            }
-          />
-
-          {/* Add Button */}
-          <View style={styles.addButtonContainer}>
-            <TouchableOpacity
-              style={[
-                styles.addExerciseButtonModal,
-                (selectedExercises.length === 0 || isWorkoutCompleted) && styles.addExerciseButtonModalDisabled,
-              ]}
-              onPress={handleAddExercise}
-              disabled={selectedExercises.length === 0 || isWorkoutCompleted}
-            >
-              <Text style={styles.addExerciseButtonText}>
-                {selectedExercises.length === 0
-                  ? 'Add Exercise'
-                  : `Add ${selectedExercises.length} Exercise${selectedExercises.length > 1 ? 's' : ''}`}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </BottomDrawer>
+        exercises={availableExercises}
+        onSelectExercises={handleSelectExercises}
+        onCreateExercise={handleCreateExercise}
+        creating={creatingExercise}
+      />
 
     </View>
   );
@@ -922,101 +847,6 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   completeWorkoutText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  addExerciseModalContent: {
-    flex: 1,
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.md,
-  },
-  categoryPillsContainer: {
-    marginBottom: spacing.md,
-  },
-  categoryPillsScrollContent: {
-    paddingRight: spacing.md,
-    gap: spacing.sm,
-  },
-  categoryPill: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.lg,
-    backgroundColor: themeColors.background.surface,
-    borderWidth: 1,
-    borderColor: themeColors.border.default,
-    marginRight: spacing.sm,
-  },
-  categoryPillActive: {
-    backgroundColor: themeColors.primary.main,
-    borderColor: themeColors.primary.main,
-  },
-  categoryPillText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: themeColors.text.secondary,
-  },
-  categoryPillTextActive: {
-    color: '#fff',
-    fontWeight: '600',
-  },
-  exerciseListContent: {
-    paddingBottom: spacing.md,
-  },
-  exerciseListItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    backgroundColor: themeColors.background.surface,
-    borderRadius: borderRadius.md,
-    marginBottom: spacing.sm,
-    borderWidth: 1,
-    borderColor: themeColors.border.default,
-  },
-  exerciseListItemSelected: {
-    backgroundColor: themeColors.background.elevated,
-    borderColor: themeColors.primary.main,
-    borderWidth: 2,
-  },
-  exerciseListItemText: {
-    fontSize: 16,
-    color: themeColors.text.primary,
-    flex: 1,
-  },
-  exerciseListItemTextSelected: {
-    color: themeColors.text.primary,
-    fontWeight: '600',
-  },
-  emptyExerciseList: {
-    padding: spacing.xl,
-    alignItems: 'center',
-  },
-  emptyExerciseListText: {
-    color: themeColors.text.muted,
-    fontSize: 14,
-    textAlign: 'center',
-  },
-  addButtonContainer: {
-    paddingVertical: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: themeColors.border.default,
-    backgroundColor: themeColors.background.secondary,
-    marginHorizontal: -spacing.md,
-    paddingHorizontal: spacing.md,
-  },
-  addExerciseButtonModal: {
-    backgroundColor: themeColors.primary.main,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    alignItems: 'center',
-  },
-  addExerciseButtonModalDisabled: {
-    backgroundColor: themeColors.background.surface,
-    opacity: 0.5,
-  },
-  addExerciseButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',

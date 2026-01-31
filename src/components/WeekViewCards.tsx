@@ -1,9 +1,9 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Dimensions } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
-import { workoutService } from '../services/workoutService';
-import { ScheduleData, PlanInstanceDay } from '../types/workout';
+import { PlanInstanceDay } from '../types/workout';
 import { themeColors, spacing, borderRadius } from '../theme/colors';
+import { useSchedule } from '../context/ScheduleContext';
 
 interface WeekViewCardsProps {
   mesocycleId: number | null;
@@ -20,30 +20,7 @@ interface DayCardData {
 }
 
 export const WeekViewCards: React.FC<WeekViewCardsProps> = ({ mesocycleId }) => {
-  const [schedule, setSchedule] = useState<ScheduleData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const fetchSchedule = async () => {
-      if (!mesocycleId) {
-        setLoading(false);
-        return;
-      }
-
-      try {
-        const data = await workoutService.getSchedule(mesocycleId);
-        setSchedule(data);
-      } catch (err) {
-        console.error('Error fetching schedule:', err);
-        setError(err instanceof Error ? err.message : 'Failed to fetch schedule');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchSchedule();
-  }, [mesocycleId]);
+  const { schedule, loading, error } = useSchedule();
 
   // Process completed workouts and create map (same logic as WorkoutCalendar)
   const { completedDates, completedDatesMap } = useMemo(() => {

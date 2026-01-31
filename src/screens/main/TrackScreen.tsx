@@ -17,6 +17,7 @@ import { WeekViewCards } from '../../components/WeekViewCards';
 import { ConsistencyCard } from '../../components/data/ConsistencyCard';
 import { LastWorkoutVolumeCard } from '../../components/data/LastWorkoutVolumeCard';
 import { themeColors, spacing } from '../../theme/colors';
+import { useSchedule } from '../../context/ScheduleContext';
 import type { CompositeNavigationProp } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -35,11 +36,22 @@ const NextWorkout: React.FC<{
   isStartingWorkout: boolean;
 }> = ({ currentMesocycle, onStartWorkout, isStartingWorkout }) => {
   const navigation = useNavigation<TrackScreenNavigationProp>();
+  const { schedule, loading: scheduleLoading, refreshSchedule, fetchSchedule } = useSchedule();
   const [nextWorkout, setNextWorkout] = useState<PlanInstanceDay | null>(null);
   const [inProgressWorkout, setInProgressWorkout] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isStarting, setIsStarting] = useState(false);
+
+  // Sync nextWorkout with schedule from context
+  useEffect(() => {
+    if (currentMesocycle && schedule) {
+      const firstUpcomingDay = schedule.upcomingDays.length > 0 ? schedule.upcomingDays[0] : null;
+      setNextWorkout(firstUpcomingDay);
+    } else if (!currentMesocycle) {
+      setNextWorkout(null);
+    }
+  }, [currentMesocycle, schedule]);
 
   // Refetch data whenever the screen comes into focus
   useFocusEffect(
@@ -50,7 +62,6 @@ const NextWorkout: React.FC<{
         setError(null);
         setLoading(true);
         setInProgressWorkout(null);
-        setNextWorkout(null);
         
         try {
           // Priority 1: Check for in-progress workout instance
@@ -62,20 +73,6 @@ const NextWorkout: React.FC<{
             setInProgressWorkout(latestWorkoutData);
             setLoading(false);
             return;
-          }
-          
-          // Priority 2: Check for next workout in mesocycle
-          if (currentMesocycle) {
-            console.log('Fetching schedule for mesocycle:', currentMesocycle.id);
-            const data = await workoutService.getSchedule(currentMesocycle.id);
-            console.log('Schedule data received:', JSON.stringify(data.upcomingDays, null, 2));
-            
-            // Get the first upcoming day
-            const firstUpcomingDay = data.upcomingDays.length > 0 ? data.upcomingDays[0] : null;
-            setNextWorkout(firstUpcomingDay);
-          } else {
-            // No mesocycle, no in-progress workout - will show empty state
-            setNextWorkout(null);
           }
         } catch (err) {
           console.error('Error fetching workout data:', err);
@@ -91,7 +88,7 @@ const NextWorkout: React.FC<{
       };
       
       fetchNextWorkout();
-    }, [currentMesocycle])
+    }, [])
   );
 
   const handleContinueWorkout = async () => {
@@ -136,10 +133,8 @@ const NextWorkout: React.FC<{
           // Complete the rest day
           await workoutService.completeRestDay(newIteration.id, firstDay.id);
           
-          // Reload by refetching
-          const data = await workoutService.getSchedule(currentMesocycle?.id || 0);
-          const firstUpcomingDay = data.upcomingDays.length > 0 ? data.upcomingDays[0] : null;
-          setNextWorkout(firstUpcomingDay);
+          // Reload by refreshing schedule - nextWorkout will update via useEffect
+          await refreshSchedule();
         } else {
           // Start the workout with the new iteration's first day
           const workoutInstance = await workoutService.startWorkout(newIteration.id, firstDay.id);
@@ -165,10 +160,8 @@ const NextWorkout: React.FC<{
         try {
           await workoutService.completeRestDay(nextWorkout.planInstanceId, nextWorkout.id);
           
-          // Reload by refetching
-          const data = await workoutService.getSchedule(currentMesocycle?.id || 0);
-          const firstUpcomingDay = data.upcomingDays.length > 0 ? data.upcomingDays[0] : null;
-          setNextWorkout(firstUpcomingDay);
+          // Reload by refreshing schedule - nextWorkout will update via useEffect
+          await refreshSchedule();
           setIsStarting(false);
         } catch (err) {
           console.error('Error completing rest day:', err);
@@ -193,7 +186,7 @@ const NextWorkout: React.FC<{
     }
   };
   
-  if (loading) {
+  if (loading || scheduleLoading) {
     return (
       <View style={styles.nextWorkoutHeader}>
         <View style={styles.nextWorkoutContent}>
@@ -391,6 +384,7 @@ const NextWorkout: React.FC<{
 
 export const TrackScreen: React.FC = () => {
   const navigation = useNavigation<TrackScreenNavigationProp>();
+  const { fetchSchedule, clearSchedule } = useSchedule();
   const [currentMesocycle, setCurrentMesocycle] = useState<CurrentMesocycle | null>(null);
   const [isStartingWorkout, setIsStartingWorkout] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -424,8 +418,12 @@ export const TrackScreen: React.FC = () => {
         if (selectedMesocycle) {
           console.log('Selected mesocycle:', selectedMesocycle);
           setCurrentMesocycle(selectedMesocycle);
+          // Fetch schedule for the selected mesocycle
+          await fetchSchedule(selectedMesocycle.id);
         } else {
           console.log('No mesocycle found');
+          setCurrentMesocycle(null);
+          clearSchedule();
         }
       } catch (err) {
         console.error('Error fetching mesocycles:', err);
@@ -449,7 +447,7 @@ export const TrackScreen: React.FC = () => {
     };
 
     fetchCurrentMesocycle();
-  }, []);
+  }, [fetchSchedule, clearSchedule]);
 
   const startWorkoutInstance = async (workoutInstanceId: number) => {
     try {

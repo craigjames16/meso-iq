@@ -7,6 +7,7 @@ import {
   TextInput,
   Alert,
   Animated,
+  ActivityIndicator,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -23,6 +24,7 @@ export interface ExerciseSet {
   weight: number;
   setNumber?: number;
   completed?: boolean;
+  loading?: boolean;
   lastSet?: {
     reps: number;
     weight: number;
@@ -362,11 +364,13 @@ export const ExerciseTrackingCard: React.FC<ExerciseTrackingCardProps> = ({
                 set.completed ? styles.completeButtonActive : styles.completeButtonInactive,
               ]}
               onPress={() => onSetCompletion(exerciseIndex, setIndex, !set.completed)}
-              disabled={isWorkoutCompleted}
+              disabled={isWorkoutCompleted || set.loading}
             >
-              {set.completed && (
+              {set.loading ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : set.completed ? (
                 <MaterialIcons name="check" size={18} color="#fff" />
-              )}
+              ) : null}
             </TouchableOpacity>
           </AnimatedSetRowBackground>
         ))}

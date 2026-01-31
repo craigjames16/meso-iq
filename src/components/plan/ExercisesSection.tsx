@@ -34,7 +34,6 @@ export const ExercisesSection = forwardRef<ExercisesSectionRef>((props, ref) => 
   const [error, setError] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [modalVisible, setModalVisible] = useState(false);
-  const [categoryPickerVisible, setCategoryPickerVisible] = useState(false);
   const [newExercise, setNewExercise] = useState({
     name: '',
     category: '',
@@ -50,6 +49,12 @@ export const ExercisesSection = forwardRef<ExercisesSectionRef>((props, ref) => 
   useEffect(() => {
     fetchExercises();
   }, []);
+
+  useEffect(() => {
+    if (!modalVisible) {
+      setNewExercise({ name: '', category: '' });
+    }
+  }, [modalVisible]);
 
   const fetchExercises = async () => {
     try {
@@ -285,19 +290,34 @@ export const ExercisesSection = forwardRef<ExercisesSectionRef>((props, ref) => 
           />
 
           <Text style={styles.inputLabel}>Category</Text>
-          <TouchableOpacity
-            style={styles.pickerButton}
-            onPress={() => setCategoryPickerVisible(true)}
-          >
-            <Text style={newExercise.category ? styles.pickerButtonText : styles.pickerButtonPlaceholder}>
-              {newExercise.category ? formatCategoryName(newExercise.category) : 'Select category'}
-            </Text>
-            <MaterialIcons
-              name="keyboard-arrow-down"
-              size={24}
-              color={themeColors.text.secondary}
-            />
-          </TouchableOpacity>
+          <View style={styles.categoryPillsContainer}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.categoryPillsScrollContent}
+            >
+              {EXERCISE_CATEGORIES.map((category) => (
+                <TouchableOpacity
+                  key={category}
+                  style={[
+                    styles.categoryPill,
+                    newExercise.category === category && styles.categoryPillActive,
+                  ]}
+                  onPress={() => setNewExercise(prev => ({ ...prev, category }))}
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    style={[
+                      styles.categoryPillText,
+                      newExercise.category === category && styles.categoryPillTextActive,
+                    ]}
+                  >
+                    {formatCategoryName(category)}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
 
           <View style={styles.drawerFooter}>
             <TouchableOpacity
@@ -325,16 +345,6 @@ export const ExercisesSection = forwardRef<ExercisesSectionRef>((props, ref) => 
         </View>
       </BottomDrawer>
 
-      {/* Category Picker Drawer */}
-      <BottomDrawer
-        visible={categoryPickerVisible}
-        onClose={() => setCategoryPickerVisible(false)}
-        title="Select Category"
-        items={EXERCISE_CATEGORIES.map(category => ({
-          label: formatCategoryName(category),
-          onPress: () => setNewExercise(prev => ({ ...prev, category })),
-        }))}
-      />
     </View>
   );
 });
@@ -505,25 +515,34 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginBottom: spacing.sm,
   },
-  pickerButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  categoryPillsContainer: {
+    marginBottom: spacing.md,
+  },
+  categoryPillsScrollContent: {
+    paddingRight: spacing.md,
+    gap: spacing.sm,
+  },
+  categoryPill: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.lg,
     backgroundColor: themeColors.background.surface,
     borderWidth: 1,
     borderColor: themeColors.border.default,
-    borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    marginBottom: spacing.md,
+    marginRight: spacing.sm,
   },
-  pickerButtonText: {
-    color: themeColors.text.primary,
-    fontSize: 16,
+  categoryPillActive: {
+    backgroundColor: themeColors.primary.main,
+    borderColor: themeColors.primary.main,
   },
-  pickerButtonPlaceholder: {
-    color: themeColors.text.muted,
-    fontSize: 16,
+  categoryPillText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: themeColors.text.secondary,
+  },
+  categoryPillTextActive: {
+    color: '#fff',
+    fontWeight: '600',
   },
   drawerFooter: {
     flexDirection: 'row',

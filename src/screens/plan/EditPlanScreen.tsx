@@ -194,30 +194,45 @@ export const EditPlanScreen: React.FC = () => {
     setAddExerciseModalVisible(true);
   };
 
-  const handleSelectExercise = (exercise: ExerciseListItem) => {
+  const handleSelectExercises = (exercises: ExerciseListItem[]) => {
     if (!selectedDayForExercise) return;
 
     const day = workoutDays.find((d) => d.id === selectedDayForExercise);
     if (!day || day.isRestDay) return;
-    // Check if exercise already exists in day
-    if (day.exercises.some((ex) => ex.id === exercise.id)) {
-      Alert.alert('Exercise Already Added', 'This exercise is already in the day.');
+
+    // Filter out exercises that already exist in the day
+    const newExercises: Exercise[] = exercises
+      .filter((exercise) => {
+        if (day.exercises.some((ex) => ex.id === exercise.id)) {
+          return false;
+        }
+        return true;
+      })
+      .map((exercise, index) => ({
+        id: exercise.id,
+        name: exercise.name,
+        category: exercise.category,
+        order: day.exercises.length + index + 1,
+      }));
+
+    if (newExercises.length === 0) {
+      Alert.alert('Exercise Already Added', 'All selected exercises are already in the day.');
       return;
     }
 
-    const newExercise: Exercise = {
-      id: exercise.id,
-      name: exercise.name,
-      category: exercise.category,
-      order: day.exercises.length + 1,
-    };
+    if (newExercises.length < exercises.length) {
+      Alert.alert(
+        'Some Exercises Already Added',
+        `${exercises.length - newExercises.length} exercise(s) were already in the day and were skipped.`
+      );
+    }
 
     setWorkoutDays((prev) =>
       prev.map((d) => {
         if (d.id === selectedDayForExercise) {
           return {
             ...d,
-            exercises: [...d.exercises, newExercise],
+            exercises: [...d.exercises, ...newExercises],
           };
         }
         return d;
@@ -456,7 +471,7 @@ export const EditPlanScreen: React.FC = () => {
           setAutoSelectExerciseId(null);
         }}
         exercises={availableExercises}
-        onSelectExercise={handleSelectExercise}
+        onSelectExercises={handleSelectExercises}
         onCreateExercise={handleCreateExercise}
         creating={creatingExercise}
         autoSelectExerciseId={autoSelectExerciseId}

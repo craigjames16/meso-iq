@@ -2,9 +2,9 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { workoutService } from '../../services/workoutService';
-import { ScheduleData } from '../../types/workout';
 import { themeColors, spacing } from '../../theme/colors';
 import { DataCard } from './DataCard';
+import { useSchedule } from '../../context/ScheduleContext';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/AppNavigator';
 
@@ -16,7 +16,7 @@ interface LastWorkoutVolumeCardProps {
 
 export const LastWorkoutVolumeCard: React.FC<LastWorkoutVolumeCardProps> = ({ mesocycleId }) => {
   const navigation = useNavigation<LastWorkoutVolumeCardNavigationProp>();
-  const [schedule, setSchedule] = useState<ScheduleData | null>(null);
+  const { schedule } = useSchedule();
   const [totalVolume, setTotalVolume] = useState<number | null>(null);
   const [workoutInstanceId, setWorkoutInstanceId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -30,18 +30,14 @@ export const LastWorkoutVolumeCard: React.FC<LastWorkoutVolumeCardProps> = ({ me
 
   useEffect(() => {
     const fetchLastWorkoutVolume = async () => {
-      if (!mesocycleId) {
+      if (!mesocycleId || !schedule) {
         setLoading(false);
         return;
       }
 
       try {
-        // First, get the schedule to find the last completed workout
-        const scheduleData = await workoutService.getSchedule(mesocycleId);
-        setSchedule(scheduleData);
-
         // Find the last completed workout (not rest day)
-        const completedWorkouts = scheduleData.previousDays.filter(
+        const completedWorkouts = schedule.previousDays.filter(
           day => !day.planDay.isRestDay && day.workoutInstance?.completedAt
         );
 
@@ -90,7 +86,7 @@ export const LastWorkoutVolumeCard: React.FC<LastWorkoutVolumeCardProps> = ({ me
     };
 
     fetchLastWorkoutVolume();
-  }, [mesocycleId]);
+  }, [mesocycleId, schedule]);
 
   if (loading) {
     return (

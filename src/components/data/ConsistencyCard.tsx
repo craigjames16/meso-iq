@@ -1,10 +1,10 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { View, StyleSheet, ActivityIndicator } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { workoutService } from '../../services/workoutService';
-import { ScheduleData, PlanInstanceDay } from '../../types/workout';
+import { PlanInstanceDay } from '../../types/workout';
 import { themeColors, spacing } from '../../theme/colors';
 import { DataCard } from './DataCard';
+import { useSchedule } from '../../context/ScheduleContext';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/AppNavigator';
 
@@ -16,34 +16,11 @@ interface ConsistencyCardProps {
 
 export const ConsistencyCard: React.FC<ConsistencyCardProps> = ({ mesocycleId }) => {
   const navigation = useNavigation<ConsistencyCardNavigationProp>();
-  const [schedule, setSchedule] = useState<ScheduleData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { schedule, loading, error } = useSchedule();
 
   const handlePress = () => {
     navigation.navigate('Heatmap', { mesocycleId });
   };
-
-  useEffect(() => {
-    const fetchSchedule = async () => {
-      if (!mesocycleId) {
-        setLoading(false);
-        return;
-      }
-
-      try {
-        const data = await workoutService.getSchedule(mesocycleId);
-        setSchedule(data);
-      } catch (err) {
-        console.error('Error fetching schedule:', err);
-        setError(err instanceof Error ? err.message : 'Failed to fetch schedule');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchSchedule();
-  }, [mesocycleId]);
 
   // Process completed workouts and create map (same logic as WorkoutCalendar)
   const completedDatesMap = useMemo(() => {
@@ -98,7 +75,8 @@ export const ConsistencyCard: React.FC<ConsistencyCardProps> = ({ mesocycleId })
     return rows;
   }, [last28Days]);
 
-  if (loading) {
+  // Only show loading/error if we have a mesocycleId and schedule is being fetched
+  if (mesocycleId && loading) {
     return (
       <DataCard title="Consistency" onPress={handlePress}>
         <View style={styles.loadingContainer}>
@@ -108,8 +86,13 @@ export const ConsistencyCard: React.FC<ConsistencyCardProps> = ({ mesocycleId })
     );
   }
 
-  if (error) {
+  if (mesocycleId && error) {
     return null; // Silently fail - don't show error
+  }
+
+  // If no mesocycleId, don't show the card
+  if (!mesocycleId || !schedule) {
+    return null;
   }
 
   return (
