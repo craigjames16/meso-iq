@@ -25,7 +25,7 @@ export const API_ENDPOINTS = {
     GET: (id: number) => `/api/mesocycles/${id}`,
     DELETE: (id: number) => `/api/mesocycles/${id}`,
     COMPLETE: (id: number) => `/api/mesocycles/${id}`,
-    SCHEDULE: (id: number) => `/api/mesocycles/${id}/schedule`,
+    UPCOMING: (id: number) => `/api/mesocycles/${id}/upcoming`,
   },
   PLAN_INSTANCES: {
     CREATE: '/api/plan-instances',
@@ -37,6 +37,7 @@ export const API_ENDPOINTS = {
   WORKOUT_INSTANCES: {
     LIST: '/api/workout-instances',
     LATEST: '/api/workout-instances/latest',
+    HISTORY: '/api/workout-instances/history',
     GET: (id: number) => `/api/workout-instances/${id}`,
     COMPLETE: (id: number) => `/api/workout-instances/${id}/complete`,
     SETS: (id: number) => `/api/workout-instances/${id}/sets`,

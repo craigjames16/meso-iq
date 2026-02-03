@@ -8,8 +8,8 @@ import {
   TextInput,
   ActivityIndicator,
   Animated,
-  KeyboardAvoidingView,
   Platform,
+  ScrollView,
 } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { themeColors, borderRadius, spacing } from '../../theme/colors';
@@ -40,6 +40,7 @@ export const AIPlanChatModal: React.FC<AIPlanChatModalProps> = ({
       setIsLoading(false);
     }
   }, [visible]);
+
 
   // Animate modal
   useEffect(() => {
@@ -109,10 +110,7 @@ export const AIPlanChatModal: React.FC<AIPlanChatModalProps> = ({
       onRequestClose={onClose}
       statusBarTranslucent
     >
-      <KeyboardAvoidingView
-        style={styles.container}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
+      <View style={styles.container}>
         {/* Overlay */}
         <Animated.View
           style={[
@@ -139,12 +137,7 @@ export const AIPlanChatModal: React.FC<AIPlanChatModalProps> = ({
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.headerLeft}>
-              <MaterialIcons
-                name="auto-awesome"
-                size={24}
-                color={themeColors.primary.main}
-              />
-              <Text style={styles.headerTitle}>Create Plan with AI</Text>
+              <Text style={styles.headerTitle}>Create Plan From Description</Text>
             </View>
             <TouchableOpacity
               onPress={onClose}
@@ -158,25 +151,20 @@ export const AIPlanChatModal: React.FC<AIPlanChatModalProps> = ({
             </TouchableOpacity>
           </View>
 
-          {/* Content */}
-          <View style={styles.content}>
+          {/* Content with ScrollView */}
+          <ScrollView
+            style={styles.scrollView}
+            contentContainerStyle={styles.scrollViewContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
             {!isLoading ? (
               <>
-                <View style={styles.iconContainer}>
-                  <MaterialIcons
-                    name="auto-awesome"
-                    size={48}
-                    color={themeColors.primary.main}
-                  />
-                </View>
                 <Text style={styles.title}>Describe Your Workout Plan</Text>
                 <Text style={styles.subtitle}>
                   Tell us what kind of workout plan you'd like to create. For example:
                 </Text>
                 <View style={styles.exampleContainer}>
-                  <Text style={styles.exampleText}>
-                    • "Create a 4-day upper/lower split focusing on strength"
-                  </Text>
                   <Text style={styles.exampleText}>
                     • "Build a 5-day push/pull/legs routine"
                   </Text>
@@ -225,9 +213,9 @@ export const AIPlanChatModal: React.FC<AIPlanChatModalProps> = ({
                 </Text>
               </View>
             )}
-          </View>
+          </ScrollView>
         </Animated.View>
-      </KeyboardAvoidingView>
+      </View>
     </Modal>
   );
 };
@@ -250,6 +238,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: borderRadius.xl,
     borderTopRightRadius: borderRadius.xl,
     paddingBottom: Platform.OS === 'ios' ? 34 : spacing.md,
+    overflow: 'hidden',
   },
   header: {
     flexDirection: 'row',
@@ -269,6 +258,13 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     color: themeColors.text.primary,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollViewContent: {
+    padding: spacing.lg,
+    paddingBottom: spacing.xl * 2,
   },
   content: {
     flex: 1,
@@ -296,8 +292,8 @@ const styles = StyleSheet.create({
   exampleContainer: {
     backgroundColor: themeColors.background.surface,
     borderRadius: borderRadius.md,
-    padding: spacing.md,
-    marginBottom: spacing.lg,
+    padding: spacing.sm,
+    marginBottom: spacing.sm,
     borderWidth: 1,
     borderColor: themeColors.border.default,
   },

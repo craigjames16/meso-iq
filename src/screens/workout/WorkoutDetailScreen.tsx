@@ -448,8 +448,11 @@ export const WorkoutDetailScreen: React.FC = () => {
       return null;
     }
 
+    // Use exercise data from API response if available, otherwise fall back to exercise parameter
+    const exerciseData = newExercise.exercise || exercise;
+
     // Get all workout instances for this exercise (history)
-    const history: HistoryInstance[] = exercise.workoutInstances
+    const history: HistoryInstance[] = exerciseData.workoutInstances
       ?.filter((instance: any) => instance.completedAt)
       ?.map((instance: any) => ({
         workoutInstanceId: instance.workoutInstanceId,
@@ -459,7 +462,7 @@ export const WorkoutDetailScreen: React.FC = () => {
       })) || [];
     
     // Filter mesocycle-specific history
-    const mesocycleHistory: HistoryInstance[] = exercise.workoutInstances
+    const mesocycleHistory: HistoryInstance[] = exerciseData.workoutInstances
       ?.filter((instance: any) => 
         instance.mesocycleId === currentMesocycleId && 
         instance.workoutInstanceId !== workoutData.id &&

@@ -44,6 +44,7 @@ export interface ExerciseDetail {
   id: number;
   name: string;
   category: string;
+  userId: string | null;
   prs: ExercisePRs;
   totalSets: number;
   totalVolume: number;

@@ -1,40 +1,31 @@
 import { apiClient } from '../api/client';
 import { endpoints } from '../api/endpoints';
-import { CurrentMesocycle, ScheduleData, WorkoutInstance } from '../types/workout';
+import { CurrentMesocycle, ScheduleData, WorkoutInstance, LatestWorkoutResponse, HistoryData, UpcomingData } from '../types/workout';
 
 export const workoutService = {
   async getMesocycles(): Promise<CurrentMesocycle[]> {
     try {
-      console.log('getMesocycles: Fetching from', endpoints.MESOCYCLES.LIST);
       const response = await apiClient.get<any>(
         endpoints.MESOCYCLES.LIST
       );
       
-      console.log('getMesocycles: Raw response:', JSON.stringify(response, null, 2));
-      console.log('getMesocycles: Response type:', typeof response);
-      console.log('getMesocycles: Is array?', Array.isArray(response));
-      
       // Validate response is an array
       if (!response) {
-        console.warn('getMesocycles: No response received');
         return [];
       }
       
       // Check if response is wrapped in a data property
       let data = response;
       if (response.data && Array.isArray(response.data)) {
-        console.log('getMesocycles: Response wrapped in data property');
         data = response.data;
       }
       
       // Check if it's an error object
       if (response.error) {
-        console.error('getMesocycles: Error in response:', response.error);
         throw new Error(response.error || response.message || 'Failed to fetch mesocycles');
       }
       
       if (!Array.isArray(data)) {
-        console.error('getMesocycles: Expected array but got:', typeof data, data);
         // Try to extract a meaningful error message
         const errorMsg = data.message || data.error || 'Invalid response format: expected array';
         throw new Error(errorMsg);
@@ -42,7 +33,6 @@ export const workoutService = {
       
       return data as CurrentMesocycle[];
     } catch (error: any) {
-      console.error('getMesocycles error:', error);
       // If it's already an Error with a message, re-throw it
       if (error instanceof Error) {
         throw error;
@@ -51,20 +41,31 @@ export const workoutService = {
     }
   },
 
-  async getSchedule(mesocycleId: number): Promise<ScheduleData> {
+  async getHistory(): Promise<HistoryData> {
     try {
-      const response = await apiClient.get<ScheduleData>(
-        endpoints.MESOCYCLES.SCHEDULE(mesocycleId)
+      const response = await apiClient.get<HistoryData>(
+        endpoints.WORKOUT_INSTANCES.HISTORY
       );
       return response;
     } catch (error: any) {
-      throw new Error(error.message || 'Failed to fetch schedule');
+      throw new Error(error.message || 'Failed to fetch history');
     }
   },
 
-  async getLatestWorkout(): Promise<any> {
+  async getUpcoming(mesocycleId: number): Promise<UpcomingData> {
     try {
-      const response = await apiClient.get<any>(
+      const response = await apiClient.get<UpcomingData>(
+        endpoints.MESOCYCLES.UPCOMING(mesocycleId)
+      );
+      return response;
+    } catch (error: any) {
+      throw new Error(error.message || 'Failed to fetch upcoming days');
+    }
+  },
+
+  async getLatestWorkout(): Promise<LatestWorkoutResponse | null> {
+    try {
+      const response = await apiClient.get<LatestWorkoutResponse>(
         endpoints.WORKOUT_INSTANCES.LATEST
       );
       return response;

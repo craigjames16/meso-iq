@@ -9,9 +9,7 @@ import {
   ActivityIndicator,
   Alert,
   ScrollView,
-  Platform,
 } from 'react-native';
-import { Picker } from '@react-native-picker/picker';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { themeColors, borderRadius, spacing } from '../../theme/colors';
 import { ExerciseListItem } from '../../types/plan';
@@ -174,6 +172,7 @@ export const AddExerciseModal: React.FC<AddExerciseModalProps> = ({
       title={activeTab === 'browse' ? 'Add Exercise' : 'Create Exercise'}
       height="80%"
       disableScrollView={activeTab === 'browse'}
+      disableKeyboardAvoidance={true}
     >
       {/* Tab Switcher */}
       <View style={styles.tabContainer}>
@@ -233,7 +232,7 @@ export const AddExerciseModal: React.FC<AddExerciseModalProps> = ({
             </View>
 
             {/* Fixed Category Pills */}
-            <View style={styles.categoryPillsContainer}>
+            <View style={[styles.categoryPillsContainer, styles.categoryPillsContainerBrowse]}>
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
@@ -327,60 +326,36 @@ export const AddExerciseModal: React.FC<AddExerciseModalProps> = ({
             />
           </View>
 
-          {/* Category Picker */}
+          {/* Category Pills */}
           <View style={styles.inputContainer}>
             <Text style={styles.inputLabel}>Category</Text>
-            <View style={styles.pickerWrapper}>
-              {Platform.OS === 'android' ? (
-                <View style={styles.pickerAndroidWrapper}>
-                  <Text style={[styles.pickerSelectedText, !createCategory && styles.pickerSelectedTextPlaceholder]}>
-                    {createCategory ? formatCategoryName(createCategory) : 'Select category'}
-                  </Text>
-                  <Picker
-                    selectedValue={createCategory}
-                    onValueChange={setCreateCategory}
-                    style={styles.pickerAndroid}
-                    dropdownIconColor={themeColors.text.primary}
-                    mode="dropdown"
+            <View style={styles.categoryPillsContainer}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.categoryPillsScrollContent}
+              >
+                {CREATE_EXERCISE_CATEGORIES.map((category) => (
+                  <TouchableOpacity
+                    key={category}
+                    style={[
+                      styles.categoryPill,
+                      createCategory === category && styles.categoryPillActive,
+                    ]}
+                    onPress={() => setCreateCategory(category)}
+                    activeOpacity={0.7}
                   >
-                    <Picker.Item
-                      label="Select category"
-                      value=""
-                      color="#999999"
-                    />
-                    {CREATE_EXERCISE_CATEGORIES.map((cat) => (
-                      <Picker.Item
-                        key={cat}
-                        label={formatCategoryName(cat)}
-                        value={cat}
-                        color="#ffffff"
-                      />
-                    ))}
-                  </Picker>
-                </View>
-              ) : (
-                <Picker
-                  selectedValue={createCategory}
-                  onValueChange={setCreateCategory}
-                  style={styles.picker}
-                  dropdownIconColor={themeColors.text.primary}
-                  itemStyle={styles.pickerItemStyle}
-                >
-                  <Picker.Item
-                    label="Select category"
-                    value=""
-                    color={themeColors.text.muted}
-                  />
-                  {CREATE_EXERCISE_CATEGORIES.map((cat) => (
-                    <Picker.Item
-                      key={cat}
-                      label={formatCategoryName(cat)}
-                      value={cat}
-                      color={themeColors.text.primary}
-                    />
-                  ))}
-                </Picker>
-              )}
+                    <Text
+                      style={[
+                        styles.categoryPillText,
+                        createCategory === category && styles.categoryPillTextActive,
+                      ]}
+                    >
+                      {formatCategoryName(category)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
             </View>
           </View>
 
@@ -439,10 +414,11 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
   },
   categoryPillsContainer: {
+    marginBottom: spacing.md,
+  },
+  categoryPillsContainerBrowse: {
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
-    paddingBottom: spacing.md,
-    flexShrink: 0, // Prevent shrinking
   },
   categoryPillsScrollContent: {
     paddingRight: spacing.md,
@@ -469,51 +445,6 @@ const styles = StyleSheet.create({
   categoryPillTextActive: {
     color: '#fff',
     fontWeight: '600',
-  },
-  pickerWrapper: {
-    backgroundColor: themeColors.background.surface,
-    borderWidth: 1,
-    borderColor: themeColors.border.default,
-    borderRadius: borderRadius.md,
-    overflow: 'hidden',
-  },
-  picker: {
-    color: themeColors.text.primary,
-    backgroundColor: 'transparent',
-  },
-  pickerItemStyle: {
-    color: themeColors.text.primary,
-  },
-  pickerAndroidWrapper: {
-    position: 'relative',
-    width: '100%',
-  },
-  pickerSelectedText: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
-    color: themeColors.text.primary,
-    fontSize: 16,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    textAlignVertical: 'center',
-    pointerEvents: 'none',
-    zIndex: 1,
-  },
-  pickerSelectedTextPlaceholder: {
-    color: themeColors.text.muted,
-  },
-  pickerAndroid: {
-    opacity: 0,
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
-    width: '100%',
-    height: '100%',
   },
   list: {
     flex: 1,
@@ -613,7 +544,7 @@ const styles = StyleSheet.create({
   },
   createContentContainer: {
     padding: spacing.md,
-    flexGrow: 1,
+    paddingBottom: spacing.xl,
   },
   inputContainer: {
     marginBottom: spacing.md,

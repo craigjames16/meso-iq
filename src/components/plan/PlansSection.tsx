@@ -198,9 +198,9 @@ export const PlansSection = forwardRef<PlansSectionRef>((props, ref) => {
               color={themeColors.primary.main}
             />
             <View style={styles.aiOptionTextContainer}>
-              <Text style={styles.aiOptionTitle}>Create with AI</Text>
+              <Text style={styles.aiOptionTitle}>Create with Prompt</Text>
               <Text style={styles.aiOptionSubtext}>
-                Describe your workout plan and let AI create it
+                Describe your workout plan and let us create it
               </Text>
             </View>
             <MaterialIcons
@@ -268,7 +268,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   listContent: {
-    padding: spacing.md,
+    padding: spacing.sm,
     paddingBottom: spacing.xl * 2,
   },
   card: {

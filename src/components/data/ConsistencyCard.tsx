@@ -75,8 +75,8 @@ export const ConsistencyCard: React.FC<ConsistencyCardProps> = ({ mesocycleId })
     return rows;
   }, [last28Days]);
 
-  // Only show loading/error if we have a mesocycleId and schedule is being fetched
-  if (mesocycleId && loading) {
+  // Show loading if schedule is being fetched
+  if (loading) {
     return (
       <DataCard title="Consistency" onPress={handlePress}>
         <View style={styles.loadingContainer}>
@@ -86,12 +86,12 @@ export const ConsistencyCard: React.FC<ConsistencyCardProps> = ({ mesocycleId })
     );
   }
 
-  if (mesocycleId && error) {
+  if (error) {
     return null; // Silently fail - don't show error
   }
 
-  // If no mesocycleId, don't show the card
-  if (!mesocycleId || !schedule) {
+  // Show card if we have schedule data (history), even without mesocycleId
+  if (!schedule || !schedule.previousDays || schedule.previousDays.length === 0) {
     return null;
   }
 

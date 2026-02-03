@@ -105,12 +105,14 @@ export const ExerciseDetailScreen: React.FC = () => {
             </View>
           </View>
         </View>
-        <TouchableOpacity
-          onPress={() => setEditModalVisible(true)}
-          style={styles.editButton}
-        >
-          <MaterialIcons name="edit" size={24} color={themeColors.primary.main} />
-        </TouchableOpacity>
+        {exercise.userId !== null && (
+          <TouchableOpacity
+            onPress={() => setEditModalVisible(true)}
+            style={styles.editButton}
+          >
+            <MaterialIcons name="edit" size={24} color={themeColors.primary.main} />
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Tab Switcher */}

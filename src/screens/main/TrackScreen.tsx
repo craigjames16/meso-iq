@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { 
   View, 
   Text, 
@@ -384,70 +384,98 @@ const NextWorkout: React.FC<{
 
 export const TrackScreen: React.FC = () => {
   const navigation = useNavigation<TrackScreenNavigationProp>();
-  const { fetchSchedule, clearSchedule } = useSchedule();
+  const { fetchHistory, fetchSchedule, clearSchedule, refreshSchedule } = useSchedule();
   const [currentMesocycle, setCurrentMesocycle] = useState<CurrentMesocycle | null>(null);
   const [isStartingWorkout, setIsStartingWorkout] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchCurrentMesocycle = async () => {
-      try {
-        console.log('Fetching mesocycles...');
-        const data = await workoutService.getMesocycles();
-        console.log('Mesocycles received:', JSON.stringify(data, null, 2));
-        console.log('Data type:', typeof data, 'Is array:', Array.isArray(data));
-        
-        // Validate that data is an array
-        if (!data) {
-          console.warn('No data received from API');
-          setError('No mesocycles data received');
-          return;
-        }
-        
-        if (!Array.isArray(data)) {
-          console.error('Expected array but got:', typeof data, data);
-          setError('Invalid response format: expected array');
-          return;
-        }
-        
-        // Find the mesocycle in progress
-        const inProgress = data.find((m) => m.status === 'IN_PROGRESS');
-        const selectedMesocycle = inProgress || (data.length > 0 ? data[0] : null);
-        
-        if (selectedMesocycle) {
-          console.log('Selected mesocycle:', selectedMesocycle);
-          setCurrentMesocycle(selectedMesocycle);
-          // Fetch schedule for the selected mesocycle
-          await fetchSchedule(selectedMesocycle.id);
-        } else {
-          console.log('No mesocycle found');
-          setCurrentMesocycle(null);
-          clearSchedule();
-        }
-      } catch (err) {
-        console.error('Error fetching mesocycles:', err);
-        let errorMessage = 'Failed to fetch mesocycles';
-        
-        if (err instanceof Error) {
-          errorMessage = err.message;
-        } else if (typeof err === 'object' && err !== null) {
-          errorMessage = (err as any).message || JSON.stringify(err);
-        }
-        
-        console.error('Error details:', {
-          message: errorMessage,
-          error: err,
-          errorType: typeof err,
+  // Extract fetch logic into reusable function
+  const fetchCurrentMesocycle = useCallback(async () => {
+    try {
+      const latestData = await workoutService.getLatestWorkout();
+      
+      // Handle case where endpoint returns null (404)
+      if (!latestData) {
+        setCurrentMesocycle((prevMesocycle) => {
+          if (prevMesocycle) {
+            clearSchedule();
+          }
+          return null;
         });
-        setError(errorMessage);
-      } finally {
         setLoading(false);
+        return;
       }
-    };
+      
+      // Extract mesocycle info from response
+      const mesocycleFromResponse = latestData.mesocycle;
+      const mesocycleId = latestData.mesocycleId;
+      
+      // Use functional setState to check if current mesocycle changed
+      setCurrentMesocycle((prevMesocycle) => {
+        // If we have a mesocycle from the response
+        if (mesocycleFromResponse && mesocycleId) {
+          // Check if mesocycle changed
+          if (!prevMesocycle || prevMesocycle.id !== mesocycleId) {
+            // Different mesocycle - force fetch schedule (bypasses cache to ensure fresh data)
+            fetchSchedule(mesocycleId, true).catch((err) => {
+              console.error('Error fetching schedule for new mesocycle:', err);
+            });
+          } else {
+            // Same mesocycle - force refresh the schedule to get latest data
+            // This ensures newly created mesocycles show their first day even if schedule was previously empty
+            refreshSchedule().catch((err) => {
+              console.error('Error refreshing schedule:', err);
+            });
+          }
+          return mesocycleFromResponse;
+        } else {
+          // No mesocycle found, clear schedule but keep history
+          if (prevMesocycle) {
+            clearSchedule();
+          }
+          return null;
+        }
+      });
+    } catch (err) {
+      console.error('Error fetching latest workout:', err);
+      let errorMessage = 'Failed to fetch latest workout';
+      
+      if (err instanceof Error) {
+        errorMessage = err.message;
+      } else if (typeof err === 'object' && err !== null) {
+        errorMessage = (err as any).message || JSON.stringify(err);
+      }
+      
+      console.error('Error details:', {
+        message: errorMessage,
+        error: err,
+        errorType: typeof err,
+      });
+      setError(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchSchedule, clearSchedule, refreshSchedule]);
 
+  // Fetch history on mount (only once, even without mesocycle)
+  useEffect(() => {
+    fetchHistory().catch((err) => {
+      console.error('Error fetching history on mount:', err);
+    });
+  }, []); // Empty deps - only run once on mount
+
+  // Fetch on mount
+  useEffect(() => {
     fetchCurrentMesocycle();
-  }, [fetchSchedule, clearSchedule]);
+  }, [fetchCurrentMesocycle]);
+
+  // Refresh when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchCurrentMesocycle();
+    }, [fetchCurrentMesocycle])
+  );
 
   const startWorkoutInstance = async (workoutInstanceId: number) => {
     try {

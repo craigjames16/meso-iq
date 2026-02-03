@@ -198,7 +198,7 @@ export const MesocyclesSection = forwardRef<MesocyclesSectionRef>((props, ref) =
         visible={modalVisible}
         onClose={() => setModalVisible(false)}
         title="Create New Mesocycle"
-        height="70%"
+        height="50%"
       >
         <View style={styles.drawerContent}>
           <Text style={styles.inputLabel}>Name</Text>
@@ -326,7 +326,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   listContent: {
-    padding: spacing.md,
+    padding: spacing.sm,
     paddingBottom: spacing.xl * 2,
   },
   card: {

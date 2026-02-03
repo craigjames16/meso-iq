@@ -155,8 +155,8 @@ export const WorkoutCalendar: React.FC<WorkoutCalendarProps> = ({ mesocycleId })
     textDayHeaderFontSize: 13,
   };
 
-  // Only show loading/error if we have a mesocycleId and schedule is being fetched
-  if (mesocycleId && loading) {
+  // Show loading if schedule is being fetched
+  if (loading) {
     return (
       <View style={styles.container}>
         <View style={styles.loadingContainer}>
@@ -166,12 +166,12 @@ export const WorkoutCalendar: React.FC<WorkoutCalendarProps> = ({ mesocycleId })
     );
   }
 
-  if (mesocycleId && error) {
+  if (error) {
     return null; // Silently fail - don't show error in calendar
   }
 
-  // If no mesocycleId or schedule, don't show the calendar
-  if (!mesocycleId || !schedule) {
+  // Show calendar if we have schedule data, even without mesocycleId (for history view)
+  if (!schedule) {
     return null;
   }
 

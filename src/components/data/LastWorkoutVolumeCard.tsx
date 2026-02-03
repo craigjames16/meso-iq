@@ -30,7 +30,8 @@ export const LastWorkoutVolumeCard: React.FC<LastWorkoutVolumeCardProps> = ({ me
 
   useEffect(() => {
     const fetchLastWorkoutVolume = async () => {
-      if (!mesocycleId || !schedule) {
+      // Show card if we have schedule data (history), even without mesocycleId
+      if (!schedule || !schedule.previousDays || schedule.previousDays.length === 0) {
         setLoading(false);
         return;
       }

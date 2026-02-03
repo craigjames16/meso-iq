@@ -37,6 +37,7 @@ interface BottomDrawerProps {
   children?: ReactNode;
   height?: number | string;
   disableScrollView?: boolean; // When true, uses View instead of ScrollView (for VirtualizedLists)
+  disableKeyboardAvoidance?: boolean; // When true, disables keyboard avoidance behavior
 }
 
 export const BottomDrawer: React.FC<BottomDrawerProps> = ({
@@ -47,6 +48,7 @@ export const BottomDrawer: React.FC<BottomDrawerProps> = ({
   children,
   height,
   disableScrollView = false,
+  disableKeyboardAvoidance = false,
 }) => {
   const overlayOpacity = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
@@ -148,7 +150,7 @@ export const BottomDrawer: React.FC<BottomDrawerProps> = ({
 
   // Handle keyboard show/hide to adjust drawer position
   useEffect(() => {
-    if (!visible) {
+    if (!visible || disableKeyboardAvoidance) {
       setKeyboardHeight(0);
       return;
     }
@@ -171,7 +173,7 @@ export const BottomDrawer: React.FC<BottomDrawerProps> = ({
       keyboardWillShow.remove();
       keyboardWillHide.remove();
     };
-  }, [visible]);
+  }, [visible, disableKeyboardAvoidance]);
 
   // PanResponder for drag gestures
   const panResponder = useMemo(
@@ -287,6 +289,74 @@ export const BottomDrawer: React.FC<BottomDrawerProps> = ({
     }, 100);
   };
 
+  // Render content (menu items and children)
+  const renderContent = () => {
+    const content = (
+      <>
+        {/* Menu Items */}
+        {items && items.length > 0 && (
+          <View style={styles.itemsContainer}>
+            {items.map((item, index) => (
+              <TouchableOpacity
+                key={index}
+                style={[
+                  styles.menuItem,
+                  index === items.length - 1 && styles.menuItemLast,
+                  item.disabled && styles.menuItemDisabled,
+                ]}
+                onPress={() => !item.disabled && handleItemPress(item)}
+                activeOpacity={item.disabled ? 1 : 0.7}
+                disabled={item.disabled}
+              >
+                {item.icon && (
+                  <MaterialIcons
+                    name={item.icon}
+                    size={22}
+                    color={
+                      item.disabled
+                        ? themeColors.text.disabled
+                        : item.destructive
+                        ? themeColors.accent.error
+                        : themeColors.text.primary
+                    }
+                    style={styles.menuItemIcon}
+                  />
+                )}
+                <Text
+                  style={[
+                    styles.menuItemText,
+                    item.destructive && styles.menuItemTextDestructive,
+                    item.disabled && styles.menuItemTextDisabled,
+                  ]}
+                >
+                  {item.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
+        {/* Custom content */}
+        {children}
+      </>
+    );
+
+    if (disableScrollView) {
+      return <View style={styles.scrollView}>{content}</View>;
+    }
+
+    return (
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollViewContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        {content}
+      </ScrollView>
+    );
+  };
+
   return (
     <Modal
       visible={visible}
@@ -346,114 +416,19 @@ export const BottomDrawer: React.FC<BottomDrawerProps> = ({
           )}
 
           {/* Content with keyboard avoidance */}
-          <KeyboardAvoidingView
-            style={styles.keyboardAvoidingView}
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
-          >
-            {disableScrollView ? (
-              <View style={styles.scrollView}>
-                {/* Menu Items */}
-                {items && items.length > 0 && (
-                  <View style={styles.itemsContainer}>
-                    {items.map((item, index) => (
-                      <TouchableOpacity
-                        key={index}
-                        style={[
-                          styles.menuItem,
-                          index === items.length - 1 && styles.menuItemLast,
-                          item.disabled && styles.menuItemDisabled,
-                        ]}
-                        onPress={() => !item.disabled && handleItemPress(item)}
-                        activeOpacity={item.disabled ? 1 : 0.7}
-                        disabled={item.disabled}
-                      >
-                        {item.icon && (
-                          <MaterialIcons
-                            name={item.icon}
-                            size={22}
-                            color={
-                              item.disabled
-                                ? themeColors.text.disabled
-                                : item.destructive
-                                ? themeColors.accent.error
-                                : themeColors.text.primary
-                            }
-                            style={styles.menuItemIcon}
-                          />
-                        )}
-                        <Text
-                          style={[
-                            styles.menuItemText,
-                            item.destructive && styles.menuItemTextDestructive,
-                            item.disabled && styles.menuItemTextDisabled,
-                          ]}
-                        >
-                          {item.label}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                )}
-
-                {/* Custom content */}
-                {children}
-              </View>
-            ) : (
-              <ScrollView
-                style={styles.scrollView}
-                contentContainerStyle={styles.scrollViewContent}
-                keyboardShouldPersistTaps="handled"
-                showsVerticalScrollIndicator={false}
-              >
-                {/* Menu Items */}
-                {items && items.length > 0 && (
-                  <View style={styles.itemsContainer}>
-                    {items.map((item, index) => (
-                      <TouchableOpacity
-                        key={index}
-                        style={[
-                          styles.menuItem,
-                          index === items.length - 1 && styles.menuItemLast,
-                          item.disabled && styles.menuItemDisabled,
-                        ]}
-                        onPress={() => !item.disabled && handleItemPress(item)}
-                        activeOpacity={item.disabled ? 1 : 0.7}
-                        disabled={item.disabled}
-                      >
-                        {item.icon && (
-                          <MaterialIcons
-                            name={item.icon}
-                            size={22}
-                            color={
-                              item.disabled
-                                ? themeColors.text.disabled
-                                : item.destructive
-                                ? themeColors.accent.error
-                                : themeColors.text.primary
-                            }
-                            style={styles.menuItemIcon}
-                          />
-                        )}
-                        <Text
-                          style={[
-                            styles.menuItemText,
-                            item.destructive && styles.menuItemTextDestructive,
-                            item.disabled && styles.menuItemTextDisabled,
-                          ]}
-                        >
-                          {item.label}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                )}
-
-                {/* Custom content */}
-                {children}
-              </ScrollView>
-            )}
-          </KeyboardAvoidingView>
+          {disableKeyboardAvoidance ? (
+            <View style={styles.keyboardAvoidingView}>
+              {renderContent()}
+            </View>
+          ) : (
+            <KeyboardAvoidingView
+              style={styles.keyboardAvoidingView}
+              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+              keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+            >
+              {renderContent()}
+            </KeyboardAvoidingView>
+          )}
         </Animated.View>
       </View>
     </Modal>

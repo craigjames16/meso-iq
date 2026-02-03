@@ -1,6 +1,5 @@
-import React, { useState, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
+import React, { useState, useRef, useEffect } from 'react';
+import { View, StyleSheet } from 'react-native';
 import { SegmentedControl } from '../../components/data';
 import {
   PlansSection,
@@ -14,38 +13,89 @@ import { themeColors, spacing } from '../../theme/colors';
 
 type PlanTab = 'plans' | 'mesocycles' | 'exercises';
 
+// Module-level state for header button access
+type PlanScreenRefs = {
+  plansSectionRef: React.RefObject<PlansSectionRef> | null;
+  mesocyclesSectionRef: React.RefObject<MesocyclesSectionRef> | null;
+  exercisesSectionRef: React.RefObject<ExercisesSectionRef> | null;
+};
+
+type PlanScreenState = {
+  activeTab: PlanTab;
+  refs: PlanScreenRefs;
+};
+
+let planScreenState: PlanScreenState = {
+  activeTab: 'plans',
+  refs: {
+    plansSectionRef: null,
+    mesocyclesSectionRef: null,
+    exercisesSectionRef: null,
+  },
+};
+
+let stateUpdateListeners: Set<() => void> = new Set();
+
+export const subscribeToPlanScreenState = (callback: () => void) => {
+  stateUpdateListeners.add(callback);
+  return () => {
+    stateUpdateListeners.delete(callback);
+  };
+};
+
+export const getPlanScreenState = () => planScreenState;
+
+export const handlePlanScreenCreateAction = () => {
+  const state = getPlanScreenState();
+  switch (state.activeTab) {
+    case 'plans':
+      state.refs.plansSectionRef?.current?.openCreateDialog();
+      break;
+    case 'mesocycles':
+      state.refs.mesocyclesSectionRef?.current?.openCreateDialog();
+      break;
+    case 'exercises':
+      state.refs.exercisesSectionRef?.current?.openCreateDialog();
+      break;
+  }
+};
+
+export const getPlanScreenResourceName = () => {
+  const state = getPlanScreenState();
+  switch (state.activeTab) {
+    case 'plans':
+      return 'Plan';
+    case 'mesocycles':
+      return 'Mesocycle';
+    case 'exercises':
+      return 'Exercise';
+    default:
+      return '';
+  }
+};
+
+const updatePlanScreenState = (updates: Partial<PlanScreenState>) => {
+  planScreenState = { ...planScreenState, ...updates };
+  stateUpdateListeners.forEach((listener) => listener());
+};
+
 export const PlanScreen: React.FC = () => {
   const [activeTab, setActiveTab] = useState<PlanTab>('plans');
   const plansSectionRef = useRef<PlansSectionRef>(null);
   const mesocyclesSectionRef = useRef<MesocyclesSectionRef>(null);
   const exercisesSectionRef = useRef<ExercisesSectionRef>(null);
 
-  const handleCreateAction = () => {
-    switch (activeTab) {
-      case 'plans':
-        plansSectionRef.current?.openCreateDialog();
-        break;
-      case 'mesocycles':
-        mesocyclesSectionRef.current?.openCreateDialog();
-        break;
-      case 'exercises':
-        exercisesSectionRef.current?.openCreateDialog();
-        break;
-    }
-  };
-
-  const getCreateButtonLabel = () => {
-    switch (activeTab) {
-      case 'plans':
-        return 'New Plan';
-      case 'mesocycles':
-        return 'New Mesocycle';
-      case 'exercises':
-        return 'New Exercise';
-      default:
-        return 'New';
-    }
-  };
+  // Update module-level state when component state or refs change
+  useEffect(() => {
+    updatePlanScreenState({
+      activeTab,
+      refs: {
+        plansSectionRef: plansSectionRef as React.RefObject<PlansSectionRef> | null,
+        mesocyclesSectionRef: mesocyclesSectionRef as React.RefObject<MesocyclesSectionRef> | null,
+        exercisesSectionRef: exercisesSectionRef as React.RefObject<ExercisesSectionRef> | null,
+      },
+    });
+  }, [activeTab]);
 
   const tabs = [
     { label: 'Plans', value: 'plans' },
@@ -64,22 +114,6 @@ export const PlanScreen: React.FC = () => {
         />
       </View>
 
-      {/* Create Button */}
-      <View style={styles.headerContainer}>
-        <TouchableOpacity
-          style={styles.createButton}
-          onPress={handleCreateAction}
-          activeOpacity={0.7}
-        >
-          <MaterialIcons
-            name="add"
-            size={20}
-            color={themeColors.text.primary}
-          />
-          <Text style={styles.createButtonText}>{getCreateButtonLabel()}</Text>
-        </TouchableOpacity>
-      </View>
-
       {/* Tab Content */}
       {activeTab === 'plans' && <PlansSection ref={plansSectionRef} />}
       {activeTab === 'mesocycles' && <MesocyclesSection ref={mesocyclesSectionRef} />}
@@ -94,29 +128,8 @@ const styles = StyleSheet.create({
     backgroundColor: themeColors.background.primary,
   },
   tabContainer: {
-    padding: spacing.md,
+    padding: spacing.sm,
     paddingBottom: spacing.sm,
-  },
-  headerContainer: {
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: themeColors.border.default,
-  },
-  createButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: themeColors.primary.main,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: 8,
-    alignSelf: 'flex-end',
-    gap: spacing.xs,
-  },
-  createButtonText: {
-    color: themeColors.text.primary,
-    fontSize: 14,
-    fontWeight: '600',
   },
 });
 
