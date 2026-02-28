@@ -59,11 +59,11 @@ export const ScheduleProvider: React.FC<ScheduleProviderProps> = ({ children }) 
         // Combine with existing upcoming days if available
         const schedule: ScheduleData | null = prev.schedule
           ? {
-              previousDays: history.previousDays,
+              workoutInstances: history.workoutInstances,
               upcomingDays: prev.schedule.upcomingDays,
             }
           : {
-              previousDays: history.previousDays,
+              workoutInstances: history.workoutInstances,
               upcomingDays: [],
             };
 
@@ -113,7 +113,7 @@ export const ScheduleProvider: React.FC<ScheduleProviderProps> = ({ children }) 
         } catch (historyError) {
           console.error('Error fetching history:', historyError);
           // Continue even if history fails - use empty array
-          history = { previousDays: [] };
+          history = { workoutInstances: [] };
         }
       }
 
@@ -122,7 +122,7 @@ export const ScheduleProvider: React.FC<ScheduleProviderProps> = ({ children }) 
       
       // Combine history and upcoming into schedule
       const schedule: ScheduleData = {
-        previousDays: history.previousDays,
+        workoutInstances: history.workoutInstances,
         upcomingDays: upcoming.upcomingDays,
       };
 
@@ -171,7 +171,7 @@ export const ScheduleProvider: React.FC<ScheduleProviderProps> = ({ children }) 
       const [history, upcoming] = await Promise.all([
         workoutService.getHistory().catch((err) => {
           console.error('Error refreshing history:', err);
-          return { previousDays: [] } as HistoryData;
+          return { workoutInstances: [] } as HistoryData;
         }),
         currentMesocycleId
           ? workoutService.getUpcoming(currentMesocycleId).catch((err) => {
@@ -182,7 +182,7 @@ export const ScheduleProvider: React.FC<ScheduleProviderProps> = ({ children }) 
       ]);
 
       const schedule: ScheduleData = {
-        previousDays: history.previousDays,
+        workoutInstances: history.workoutInstances,
         upcomingDays: upcoming.upcomingDays,
       };
 
@@ -209,7 +209,7 @@ export const ScheduleProvider: React.FC<ScheduleProviderProps> = ({ children }) 
       ...prev,
       schedule: prev.history
         ? {
-            previousDays: prev.history.previousDays,
+            workoutInstances: prev.history.workoutInstances,
             upcomingDays: [],
           }
         : null,

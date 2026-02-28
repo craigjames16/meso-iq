@@ -24,21 +24,20 @@ export const ConsistencyCard: React.FC<ConsistencyCardProps> = ({ mesocycleId })
 
   // Process completed workouts and create map (same logic as WorkoutCalendar)
   const completedDatesMap = useMemo(() => {
-    if (!schedule) return new Map<string, PlanInstanceDay>();
+    if (!schedule) return new Map<string, boolean>();
 
-    const completedWorkoutDays = schedule.previousDays.filter(
-      day => !day.planDay.isRestDay && day.workoutInstance?.completedAt
+    const completedWorkoutInstances = schedule.workoutInstances.filter(
+      instance => instance.completedAt !== null
     );
 
-    const datesMap = new Map<string, PlanInstanceDay>();
+    const datesMap = new Map<string, boolean>();
 
-    completedWorkoutDays.forEach(day => {
-      const completionDate = day.workoutInstance?.completedAt
-        ? new Date(day.workoutInstance.completedAt)
-        : new Date(day.updatedAt);
+    completedWorkoutInstances.forEach(instance => {
+      if (!instance.completedAt) return;
+      const completionDate = new Date(instance.completedAt);
       completionDate.setHours(0, 0, 0, 0);
       const dateKey = completionDate.toISOString().split('T')[0];
-      datesMap.set(dateKey, day);
+      datesMap.set(dateKey, true);
     });
 
     return datesMap;
@@ -91,7 +90,7 @@ export const ConsistencyCard: React.FC<ConsistencyCardProps> = ({ mesocycleId })
   }
 
   // Show card if we have schedule data (history), even without mesocycleId
-  if (!schedule || !schedule.previousDays || schedule.previousDays.length === 0) {
+  if (!schedule || !schedule.workoutInstances || schedule.workoutInstances.length === 0) {
     return null;
   }
 

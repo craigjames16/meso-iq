@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Dimensions } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
-import { PlanInstanceDay } from '../types/workout';
+import { PlanInstanceDay, WorkoutInstance } from '../types/workout';
 import { themeColors, spacing, borderRadius } from '../theme/colors';
 import { useSchedule } from '../context/ScheduleContext';
 
@@ -16,7 +16,8 @@ interface DayCardData {
   dayName: string;
   dayNumber: number;
   status: DayStatus;
-  planInstanceDay: PlanInstanceDay | null;
+  workoutInstance: WorkoutInstance | null;
+  upcomingDay: PlanInstanceDay | null;
 }
 
 export const WeekViewCards: React.FC<WeekViewCardsProps> = ({ mesocycleId }) => {
@@ -24,23 +25,22 @@ export const WeekViewCards: React.FC<WeekViewCardsProps> = ({ mesocycleId }) => 
 
   // Process completed workouts and create map (same logic as WorkoutCalendar)
   const { completedDates, completedDatesMap } = useMemo(() => {
-    if (!schedule) return { completedDates: [], completedDatesMap: new Map<string, PlanInstanceDay>() };
+    if (!schedule) return { completedDates: [], completedDatesMap: new Map<string, WorkoutInstance>() };
 
-    const completedWorkoutDays = schedule.previousDays.filter(
-      day => !day.planDay.isRestDay && day.workoutInstance?.completedAt
+    const completedWorkoutInstances = schedule.workoutInstances.filter(
+      instance => instance.completedAt !== null
     );
 
     const dates: Date[] = [];
-    const datesMap = new Map<string, PlanInstanceDay>();
+    const datesMap = new Map<string, WorkoutInstance>();
 
-    completedWorkoutDays.forEach(day => {
-      const completionDate = day.workoutInstance?.completedAt
-        ? new Date(day.workoutInstance.completedAt)
-        : new Date(day.updatedAt);
+    completedWorkoutInstances.forEach(instance => {
+      if (!instance.completedAt) return;
+      const completionDate = new Date(instance.completedAt);
       completionDate.setHours(0, 0, 0, 0);
       dates.push(completionDate);
       const dateKey = completionDate.toISOString().split('T')[0];
-      datesMap.set(dateKey, day);
+      datesMap.set(dateKey, instance);
     });
 
     return { completedDates: dates, completedDatesMap: datesMap };
@@ -99,23 +99,24 @@ export const WeekViewCards: React.FC<WeekViewCardsProps> = ({ mesocycleId }) => 
       
       // Determine status
       let status: DayStatus = 'none';
-      let planInstanceDay: PlanInstanceDay | null = null;
+      let workoutInstance: WorkoutInstance | null = null;
+      let upcomingDay: PlanInstanceDay | null = null;
       
       // Check if it's a completed workout
-      const completedDay = completedDatesMap.get(dateKey);
-      if (completedDay) {
+      const completedWorkout = completedDatesMap.get(dateKey);
+      if (completedWorkout) {
         status = 'completed';
-        planInstanceDay = completedDay;
+        workoutInstance = completedWorkout;
       } else {
         // Check if it's an upcoming day
-        const upcomingDay = upcomingDatesMap.get(dateKey);
-        if (upcomingDay) {
-          if (upcomingDay.planDay.isRestDay) {
+        const upcoming = upcomingDatesMap.get(dateKey);
+        if (upcoming) {
+          if (upcoming.planDay.isRestDay) {
             status = 'rest';
           } else {
             status = 'upcoming';
           }
-          planInstanceDay = upcomingDay;
+          upcomingDay = upcoming;
         }
       }
       
@@ -124,7 +125,8 @@ export const WeekViewCards: React.FC<WeekViewCardsProps> = ({ mesocycleId }) => 
         dayName,
         dayNumber,
         status,
-        planInstanceDay,
+        workoutInstance,
+        upcomingDay,
       });
     }
     

@@ -42,7 +42,7 @@ export interface PlanInstanceDay {
 }
 
 export interface HistoryData {
-  previousDays: PlanInstanceDay[];
+  workoutInstances: WorkoutInstance[];
 }
 
 export interface UpcomingData {
@@ -50,17 +50,65 @@ export interface UpcomingData {
 }
 
 export interface ScheduleData {
-  previousDays: PlanInstanceDay[];
+  workoutInstances: WorkoutInstance[];
   upcomingDays: PlanInstanceDay[];
 }
 
 export interface WorkoutInstance {
   id: number;
+  workoutId: number;
+  startedAt: string;
   completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
   workout: {
     id: number;
     name: string;
   };
+  exerciseSets?: Array<{
+    id: number;
+    exerciseId: number;
+    setNumber: number;
+    weight: number;
+    reps: number;
+    exercise: {
+      id: number;
+      name: string;
+    };
+  }>;
+  workoutExercises?: Array<{
+    id: number;
+    exerciseId: number;
+    order: number;
+    exercise: {
+      id: number;
+      name: string;
+    };
+    workout?: {
+      id: number;
+      name: string;
+    };
+  }>;
+  planInstanceDays?: Array<{
+    id: number;
+    planInstanceId: number;
+    planDayId: number;
+    planInstance: {
+      id: number;
+      planId: number;
+      iterationNumber: number | null;
+      status: string | null;
+      plan: {
+        id: number;
+        name: string;
+      };
+      mesocycle: {
+        id: number;
+        name: string;
+      } | null;
+    };
+  }>;
+  mesocycleId?: number | null;
 }
 
 export interface LatestWorkoutResponse {

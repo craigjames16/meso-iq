@@ -96,7 +96,7 @@ export const WorkoutDetailScreen: React.FC = () => {
       const currentMesocycleId = workoutData.mesocycleId || 
         workoutData.planInstanceDays?.[0]?.planInstance?.mesocycle?.id;
 
-      // Process exercise sets
+      // Process exercise sets - sets are already ordered by setNumber, subSetNumber from API
       const completedSetsMap = workoutData.exerciseSets?.reduce((acc: Record<number, any[]>, set: any) => {
         if (!acc[set.exerciseId]) {
           acc[set.exerciseId] = [];
@@ -106,6 +106,8 @@ export const WorkoutDetailScreen: React.FC = () => {
           reps: set.reps,
           weight: set.weight,
           setNumber: set.setNumber,
+          subSetNumber: set.subSetNumber ?? null,
+          setType: set.setType || 'REGULAR',
         });
         return acc;
       }, {}) || {};
@@ -114,35 +116,75 @@ export const WorkoutDetailScreen: React.FC = () => {
         let sets: ExerciseSet[];
 
         if (workoutData.completedAt) {
+          // For completed workouts, use all sets from API (already ordered)
           sets = (completedSetsMap[workoutExercise.exercise.id] || []).map((set: any) => ({
             ...set,
             completed: true,
           }));
         } else {
+          // For active workouts, merge completed sets with template sets
+          const completedSets = completedSetsMap[workoutExercise.exercise.id] || [];
           const numSets = workoutExercise.lastSets?.length || 3;
-          sets = Array.from({ length: numSets }, (_, index) => {
-            const completedSets = completedSetsMap[workoutExercise.exercise.id] || [];
-            const completedSet = completedSets.find((set: any) => set.setNumber === index + 1);
+          
+          // Group sets by setNumber to handle sub-sets
+          const setsByNumber = new Map<number, any[]>();
+          completedSets.forEach((set: any) => {
+            if (!setsByNumber.has(set.setNumber)) {
+              setsByNumber.set(set.setNumber, []);
+            }
+            setsByNumber.get(set.setNumber)!.push(set);
+          });
+
+          // Build sets array - include main sets and their sub-sets
+          sets = [];
+          for (let setNum = 1; setNum <= numSets; setNum++) {
+            const setsForThisNumber = setsByNumber.get(setNum) || [];
+            const mainSet = setsForThisNumber.find((s: any) => s.subSetNumber === null || s.subSetNumber === undefined);
+            const subSets = setsForThisNumber.filter((s: any) => s.subSetNumber !== null && s.subSetNumber !== undefined)
+              .sort((a: any, b: any) => (a.subSetNumber || 0) - (b.subSetNumber || 0));
+            
             const matchingLastSet = workoutExercise.lastSets?.find(
-              (lastSet: { setNumber: number; reps: number; weight: number }) => lastSet.setNumber === index + 1
+              (lastSet: { setNumber: number; reps: number; weight: number }) => lastSet.setNumber === setNum
             );
 
-            return completedSet
-              ? {
-                  id: completedSet.id,
-                  reps: completedSet.reps,
-                  weight: completedSet.weight,
-                  setNumber: index + 1,
-                  completed: true,
-                  lastSet: matchingLastSet || null,
-                }
-              : {
-                  reps: 0,
-                  weight: 0,
-                  setNumber: index + 1,
-                  lastSet: matchingLastSet || null,
-                };
-          });
+            // Add main set
+            if (mainSet) {
+              sets.push({
+                id: mainSet.id,
+                reps: mainSet.reps,
+                weight: mainSet.weight,
+                setNumber: mainSet.setNumber,
+                subSetNumber: null,
+                setType: mainSet.setType || 'REGULAR',
+                completed: true,
+                lastSet: matchingLastSet || null,
+              });
+            } else {
+              sets.push({
+                reps: 0,
+                weight: 0,
+                setNumber: setNum,
+                subSetNumber: null,
+                setType: 'REGULAR',
+                completed: false,
+                lastSet: matchingLastSet || null,
+              });
+            }
+
+            // Add sub-sets
+            subSets.forEach((subSet: any) => {
+              sets.push({
+                id: subSet.id,
+                reps: subSet.reps,
+                weight: subSet.weight,
+                setNumber: subSet.setNumber,
+                subSetNumber: subSet.subSetNumber,
+                setType: subSet.setType || 'REGULAR',
+                completed: true,
+                lastSet: null,
+              });
+            });
+          }
         }
 
         // Find the exercise history from available exercises
@@ -273,12 +315,15 @@ export const WorkoutDetailScreen: React.FC = () => {
       });
 
       try {
+        const set = tracking.sets[setIndex];
         const response = await workoutService.addSet(
           workoutInstanceId,
           tracking.exerciseId,
           weightToUse,
           repsToUse,
-          setIndex + 1
+          set.setNumber || setIndex + 1,
+          set.subSetNumber ?? null,
+          set.setType || 'REGULAR'
         );
 
         const newSetId = response[0]?.id;
@@ -351,9 +396,16 @@ export const WorkoutDetailScreen: React.FC = () => {
     setExerciseTrackings((prev) => {
       const updated = [...prev];
       const exercise = updated[exerciseIndex];
+      
+      // Find the next main set number (skip sub-sets)
+      const mainSets = exercise.sets.filter(s => s.subSetNumber === null || s.subSetNumber === undefined);
+      const nextSetNumber = mainSets.length > 0 
+        ? Math.max(...mainSets.map(s => s.setNumber || 0)) + 1
+        : exercise.sets.length + 1;
+      
       const matchingLastSet = workoutInstance?.workoutExercises
         ?.find((we: any) => we.exercise.id === exercise.exerciseId)
-        ?.lastSets?.find((ls: any) => ls.setNumber === exercise.sets.length + 1);
+        ?.lastSets?.find((ls: any) => ls.setNumber === nextSetNumber);
 
       updated[exerciseIndex] = {
         ...exercise,
@@ -362,7 +414,9 @@ export const WorkoutDetailScreen: React.FC = () => {
           {
             reps: 0,
             weight: 0,
-            setNumber: exercise.sets.length + 1,
+            setNumber: nextSetNumber,
+            subSetNumber: null,
+            setType: 'REGULAR',
             lastSet: matchingLastSet || null,
           },
         ],
@@ -422,17 +476,164 @@ export const WorkoutDetailScreen: React.FC = () => {
       }
     }
 
-    // Remove set from state and renumber remaining sets
+    // Remove set from state
     setExerciseTrackings((prev) => {
       const updated = [...prev];
       updated[exerciseIndex] = {
         ...updated[exerciseIndex],
-        sets: updated[exerciseIndex].sets
-          .filter((_, idx) => idx !== setIndex)
-          .map((s, idx) => ({
-            ...s,
-            setNumber: idx + 1,
-          })),
+        sets: updated[exerciseIndex].sets.filter((_, idx) => idx !== setIndex),
+      };
+      return updated;
+    });
+  };
+
+  const handleConvertSetType = async (
+    exerciseIndex: number,
+    setIndex: number,
+    setType: 'REGULAR' | 'DROP_SET' | 'MYO_REP'
+  ) => {
+    const tracking = exerciseTrackings[exerciseIndex];
+    const set = tracking.sets[setIndex];
+
+    // For incomplete sets, update local state and add blank sub-set if needed
+    if (!set.id) {
+      setExerciseTrackings((prev) => {
+        const updated = [...prev];
+        const currentSet = updated[exerciseIndex].sets[setIndex];
+        
+        // Update the set type
+        updated[exerciseIndex].sets[setIndex] = {
+          ...currentSet,
+          setType,
+        };
+
+        // If converting to DROP_SET or MYO_REP, add a blank sub-set
+        if ((setType === 'DROP_SET' || setType === 'MYO_REP') && currentSet.setNumber) {
+          // Check if there are already sub-sets for this set number
+          const existingSubSets = updated[exerciseIndex].sets.filter(
+            (s) => s.setNumber === currentSet.setNumber && 
+                   s.subSetNumber !== null && 
+                   s.subSetNumber !== undefined
+          );
+          
+          // Only add if no sub-sets exist yet
+          if (existingSubSets.length === 0) {
+            // Find the insertion point (after the parent set and any existing sub-sets)
+            let insertIndex = setIndex + 1;
+            while (
+              insertIndex < updated[exerciseIndex].sets.length &&
+              updated[exerciseIndex].sets[insertIndex].setNumber === currentSet.setNumber &&
+              updated[exerciseIndex].sets[insertIndex].subSetNumber !== null &&
+              updated[exerciseIndex].sets[insertIndex].subSetNumber !== undefined
+            ) {
+              insertIndex++;
+            }
+
+            // Add blank sub-set
+            updated[exerciseIndex].sets.splice(insertIndex, 0, {
+              reps: 0,
+              weight: 0,
+              setNumber: currentSet.setNumber,
+              subSetNumber: 1,
+              setType: setType,
+              completed: false,
+            });
+          }
+        } else if (setType === 'REGULAR') {
+          // If converting to REGULAR, remove any existing sub-sets for this set number
+          updated[exerciseIndex].sets = updated[exerciseIndex].sets.filter(
+            (s, idx) => !(
+              s.setNumber === currentSet.setNumber && 
+              s.subSetNumber !== null && 
+              s.subSetNumber !== undefined &&
+              idx !== setIndex
+            )
+          );
+        }
+
+        return updated;
+      });
+      return;
+    }
+
+    // For completed sets, update via API
+    try {
+      await workoutService.convertSetType(workoutInstanceId, set.id, setType);
+      
+      // Update local state
+      setExerciseTrackings((prev) => {
+        const updated = [...prev];
+        updated[exerciseIndex].sets[setIndex] = {
+          ...updated[exerciseIndex].sets[setIndex],
+          setType,
+        };
+        return updated;
+      });
+    } catch (err) {
+      console.error('Error converting set type:', err);
+      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to convert set type');
+    }
+  };
+
+  const handleAddSubSet = (exerciseIndex: number, parentSetIndex: number) => {
+    const tracking = exerciseTrackings[exerciseIndex];
+    const parentSet = tracking.sets[parentSetIndex];
+
+    if (!parentSet.setNumber) {
+      Alert.alert('Error', 'Invalid parent set');
+      return;
+    }
+
+    // Check if parent set is a DROP_SET or MYO_REP
+    if (parentSet.setType !== 'DROP_SET' && parentSet.setType !== 'MYO_REP') {
+      Alert.alert('Error', 'Parent set must be a Drop Set or Myo Rep Set');
+      return;
+    }
+
+    // Find existing sub-sets for this parent set number
+    const existingSubSets = tracking.sets.filter(
+      (s) => s.setNumber === parentSet.setNumber && 
+             s.subSetNumber !== null && 
+             s.subSetNumber !== undefined
+    );
+
+    const maxSubSetNumber = existingSubSets.length > 0
+      ? Math.max(...existingSubSets.map((s) => s.subSetNumber || 0))
+      : 0;
+
+    const nextSubSetNumber = maxSubSetNumber + 1;
+
+    const weightToUse = parentSet.weight || 0;
+    const repsToUse = parentSet.reps || 0;
+
+    // Find the index where to insert the sub-set (after parent and any existing sub-sets)
+    let insertIndex = parentSetIndex + 1;
+    while (
+      insertIndex < tracking.sets.length &&
+      tracking.sets[insertIndex].setNumber === parentSet.setNumber &&
+      tracking.sets[insertIndex].subSetNumber !== null &&
+      tracking.sets[insertIndex].subSetNumber !== undefined
+    ) {
+      insertIndex++;
+    }
+
+    // Add blank sub-set to state (not completed)
+    setExerciseTrackings((prev) => {
+      const updated = [...prev];
+      updated[exerciseIndex] = {
+        ...updated[exerciseIndex],
+        sets: [
+          ...updated[exerciseIndex].sets.slice(0, insertIndex),
+          {
+            reps: repsToUse,
+            weight: weightToUse,
+            setNumber: parentSet.setNumber,
+            subSetNumber: nextSubSetNumber,
+            setType: parentSet.setType || 'DROP_SET',
+            completed: false,
+          },
+          ...updated[exerciseIndex].sets.slice(insertIndex),
+        ],
       };
       return updated;
     });
@@ -491,6 +692,8 @@ export const WorkoutDetailScreen: React.FC = () => {
           reps: 0,
           weight: 0,
           setNumber: index + 1,
+          subSetNumber: null,
+          setType: 'REGULAR',
           lastSet: matchingLastSet || null,
         };
       }),
@@ -660,6 +863,8 @@ export const WorkoutDetailScreen: React.FC = () => {
               onRemoveExercise={handleRemoveExercise}
               onReorderExercise={handleReorderExercise}
               onRemoveSet={handleRemoveSet}
+              onConvertSetType={handleConvertSetType}
+              onAddSubSet={handleAddSubSet}
             />
           ))
         )}

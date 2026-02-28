@@ -22,7 +22,9 @@ export interface ExerciseSet {
   id?: number;
   reps: number;
   weight: number;
-  setNumber?: number;
+  setNumber?: number; // Main set number (1, 2, 3, etc.)
+  subSetNumber?: number | null; // Sub-set number (null for main sets, 1, 2, 3 for sub-sets)
+  setType?: 'REGULAR' | 'DROP_SET' | 'MYO_REP';
   completed?: boolean;
   loading?: boolean;
   lastSet?: {
@@ -54,8 +56,24 @@ interface ExerciseTrackingCardProps {
   onRemoveExercise: (exerciseIndex: number) => void;
   onReorderExercise: (exerciseIndex: number, direction: 'up' | 'down') => void;
   onRemoveSet: (exerciseIndex: number, setIndex: number) => void;
+  onConvertSetType?: (exerciseIndex: number, setIndex: number, setType: 'REGULAR' | 'DROP_SET' | 'MYO_REP') => void;
+  onAddSubSet?: (exerciseIndex: number, parentSetIndex: number) => void;
   onShowHistory?: (exercise: ExerciseTracking) => void;
 }
+
+// Helper function to format set number
+const formatSetNumber = (setNumber?: number, subSetNumber?: number | null): string => {
+  if (!setNumber) return '';
+  if (subSetNumber !== null && subSetNumber !== undefined) {
+    return `${setNumber}.${subSetNumber}`;
+  }
+  return setNumber.toString();
+};
+
+// Helper function to check if a set is a sub-set
+const isSubSet = (set: ExerciseSet): boolean => {
+  return set.subSetNumber !== null && set.subSetNumber !== undefined;
+};
 
 // Animated wrapper for set row background
 const AnimatedSetRowBackground: React.FC<{
@@ -143,8 +161,9 @@ const AnimatedInput: React.FC<{
 // Animated set number for fade effect on completion
 const AnimatedSetNumber: React.FC<{
   completed: boolean;
-  setNumber: number;
-}> = ({ completed, setNumber }) => {
+  setNumber: string | number;
+  setType?: 'REGULAR' | 'DROP_SET' | 'MYO_REP';
+}> = ({ completed, setNumber, setType }) => {
   const fadeAnim = useRef(new Animated.Value(completed ? 1 : 0)).current;
 
   useEffect(() => {
@@ -155,25 +174,42 @@ const AnimatedSetNumber: React.FC<{
     }).start();
   }, [completed, fadeAnim]);
 
+  // Determine base colors based on set type (when not completed)
+  let baseBgColor = 'transparent';
+  let baseBorderColor = '#666';
+  let baseTextColor = '#999';
+  
+  if (!completed) {
+    if (setType === 'DROP_SET') {
+      baseBgColor = 'rgba(33, 150, 243, 0.2)';
+      baseBorderColor = '#2196F3';
+      baseTextColor = '#2196F3';
+    } else if (setType === 'MYO_REP') {
+      baseBgColor = 'rgba(156, 39, 176, 0.2)';
+      baseBorderColor = '#9C27B0';
+      baseTextColor = '#9C27B0';
+    }
+  }
+
   const backgroundColor = fadeAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: ['transparent', '#4CAF50'],
+    outputRange: [baseBgColor, '#4CAF50'],
   });
 
   const borderColor = fadeAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: ['#666', '#4CAF50'],
+    outputRange: [baseBorderColor, '#4CAF50'],
   });
 
   const textColor = fadeAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: ['#999', '#fff'],
+    outputRange: [baseTextColor, '#fff'],
   });
 
   return (
     <Animated.View style={[styles.setNumberContainer, { backgroundColor, borderColor }]}>
       <Animated.Text style={[styles.setNumber, { color: textColor }]}>
-        {setNumber}
+        {typeof setNumber === 'number' ? setNumber : setNumber}
       </Animated.Text>
     </Animated.View>
   );
@@ -192,6 +228,8 @@ export const ExerciseTrackingCard: React.FC<ExerciseTrackingCardProps> = ({
   onRemoveExercise,
   onReorderExercise,
   onRemoveSet,
+  onConvertSetType,
+  onAddSubSet,
   onShowHistory,
 }) => {
   const [exerciseMenuVisible, setExerciseMenuVisible] = useState(false);
@@ -304,9 +342,32 @@ export const ExerciseTrackingCard: React.FC<ExerciseTrackingCardProps> = ({
             </View>
           </View>
         </View>
-        {exercise.sets.map((set, setIndex) => (
-          <AnimatedSetRowBackground key={setIndex} completed={!!set.completed} style={styles.setRow}>
-            <AnimatedSetNumber completed={!!set.completed} setNumber={setIndex + 1} />
+        {exercise.sets.map((set, setIndex) => {
+          const isSub = isSubSet(set);
+          const displayNumber = formatSetNumber(set.setNumber, set.subSetNumber);
+          const prevSet = setIndex > 0 ? exercise.sets[setIndex - 1] : null;
+          const isFirstSubSet = isSub && prevSet && !isSubSet(prevSet);
+          const nextSet = setIndex < exercise.sets.length - 1 ? exercise.sets[setIndex + 1] : null;
+          const isLastSubSet = isSub && (!nextSet || !isSubSet(nextSet) || nextSet.setNumber !== set.setNumber);
+          
+          return (
+          <View key={setIndex} style={styles.setRowContainer}>
+            {isSub && (
+              <View style={styles.subSetConnector}>
+                {isFirstSubSet && <View style={styles.connectorTop} />}
+                <View style={styles.connectorLine} />
+                {isLastSubSet && <View style={styles.connectorBottom} />}
+              </View>
+            )}
+            <AnimatedSetRowBackground 
+              completed={!!set.completed} 
+              style={[styles.setRow, isSub && styles.subSetRow]}
+            >
+            <AnimatedSetNumber 
+              completed={!!set.completed} 
+              setNumber={displayNumber} 
+              setType={set.setType}
+            />
             <TouchableOpacity
               onPress={() => handleSetMenuOpen(setIndex)}
               disabled={isWorkoutCompleted}
@@ -373,7 +434,9 @@ export const ExerciseTrackingCard: React.FC<ExerciseTrackingCardProps> = ({
               ) : null}
             </TouchableOpacity>
           </AnimatedSetRowBackground>
-        ))}
+          </View>
+          );
+        })}
       </View>
 
       {/* Exercise Menu */}
@@ -413,8 +476,48 @@ export const ExerciseTrackingCard: React.FC<ExerciseTrackingCardProps> = ({
       <BottomDrawer
         visible={setMenuVisible}
         onClose={handleSetMenuClose}
-        title={`Set ${activeSetIndex !== null ? activeSetIndex + 1 : ''}`}
+        title={`Set ${activeSetIndex !== null ? formatSetNumber(exercise.sets[activeSetIndex]?.setNumber, exercise.sets[activeSetIndex]?.subSetNumber) : ''}`}
         items={[
+          ...(activeSetIndex !== null && !isSubSet(exercise.sets[activeSetIndex]) && onConvertSetType ? [
+            {
+              label: 'Convert to Drop Set',
+              icon: 'swap-vert',
+              onPress: () => {
+                onConvertSetType(exerciseIndex, activeSetIndex, 'DROP_SET');
+                handleSetMenuClose();
+              },
+              disabled: isWorkoutCompleted || exercise.sets[activeSetIndex].setType === 'DROP_SET',
+            },
+            {
+              label: 'Convert to Myo Rep Set',
+              icon: 'swap-vert',
+              onPress: () => {
+                onConvertSetType(exerciseIndex, activeSetIndex, 'MYO_REP');
+                handleSetMenuClose();
+              },
+              disabled: isWorkoutCompleted || exercise.sets[activeSetIndex].setType === 'MYO_REP',
+            },
+            {
+              label: 'Convert to Regular Set',
+              icon: 'swap-vert',
+              onPress: () => {
+                onConvertSetType(exerciseIndex, activeSetIndex, 'REGULAR');
+                handleSetMenuClose();
+              },
+              disabled: isWorkoutCompleted || exercise.sets[activeSetIndex].setType === 'REGULAR',
+            },
+          ] : []),
+          ...(activeSetIndex !== null && !isSubSet(exercise.sets[activeSetIndex]) && onAddSubSet && (exercise.sets[activeSetIndex].setType === 'DROP_SET' || exercise.sets[activeSetIndex].setType === 'MYO_REP') ? [
+            {
+              label: 'Add Sub-Set',
+              icon: 'add',
+              onPress: () => {
+                onAddSubSet(exerciseIndex, activeSetIndex);
+                handleSetMenuClose();
+              },
+              disabled: isWorkoutCompleted,
+            },
+          ] : []),
           {
             label: 'Delete Set',
             icon: 'delete',
@@ -496,15 +599,52 @@ const styles = StyleSheet.create({
   exerciseMenuButton: {
     padding: spacing.xs,
   },
+  setRowContainer: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    marginBottom: 6,
+  },
   setRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 6,
     gap: 12,
-    width: '100%',
+    flex: 1,
     paddingHorizontal: 16,
     paddingVertical: 4,
     borderRadius: borderRadius.sm,
+  },
+  subSetRow: {
+    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+    borderLeftWidth: 3,
+    borderLeftColor: '#444',
+    paddingLeft: 13, // 16 - 3 for border
+  },
+  subSetConnector: {
+    width: 20,
+    marginRight: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  connectorLine: {
+    width: 2,
+    flex: 1,
+    backgroundColor: '#444',
+    minHeight: 40,
+  },
+  connectorTop: {
+    width: 2,
+    height: 8,
+    backgroundColor: '#444',
+    borderTopLeftRadius: 2,
+    borderTopRightRadius: 2,
+  },
+  connectorBottom: {
+    width: 2,
+    height: 8,
+    backgroundColor: '#444',
+    borderBottomLeftRadius: 2,
+    borderBottomRightRadius: 2,
   },
   setRowCompleted: {
     backgroundColor: 'rgba(76, 175, 80, 0.15)',

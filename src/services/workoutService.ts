@@ -43,10 +43,19 @@ export const workoutService = {
 
   async getHistory(): Promise<HistoryData> {
     try {
-      const response = await apiClient.get<HistoryData>(
-        endpoints.WORKOUT_INSTANCES.HISTORY
+      // Calculate date one year ago
+      const oneYearAgo = new Date();
+      oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+      const sinceDate = oneYearAgo.toISOString().split('T')[0]; // Format as YYYY-MM-DD
+      
+      // Call workout-instances endpoint with query parameters
+      const workoutInstances = await apiClient.get<WorkoutInstance[]>(
+        `${endpoints.WORKOUT_INSTANCES.LIST}?completed=true&since=${sinceDate}`
       );
-      return response;
+      
+      return {
+        workoutInstances: Array.isArray(workoutInstances) ? workoutInstances : []
+      };
     } catch (error: any) {
       throw new Error(error.message || 'Failed to fetch history');
     }
@@ -137,18 +146,78 @@ export const workoutService = {
     }
   },
 
-  async addSet(workoutInstanceId: number, exerciseId: number, weight: number, reps: number, setNumber: number): Promise<any> {
+  async addSet(
+    workoutInstanceId: number, 
+    exerciseId: number, 
+    weight: number, 
+    reps: number, 
+    setNumber: number,
+    subSetNumber?: number | null,
+    setType?: 'REGULAR' | 'DROP_SET' | 'MYO_REP'
+  ): Promise<any> {
     try {
       const response = await apiClient.post<any>(
         endpoints.WORKOUT_INSTANCES.SETS(workoutInstanceId),
         {
           exerciseId,
-          sets: [{ weight, reps, setNumber }],
+          sets: [{ 
+            weight, 
+            reps, 
+            setNumber,
+            subSetNumber: subSetNumber ?? null,
+            setType: setType || 'REGULAR'
+          }],
         }
       );
       return response;
     } catch (error: any) {
       throw new Error(error.message || 'Failed to add set');
+    }
+  },
+
+  async convertSetType(workoutInstanceId: number, setId: number, setType: 'REGULAR' | 'DROP_SET' | 'MYO_REP'): Promise<any> {
+    try {
+      const response = await apiClient.patch<any>(
+        `/api/workout-instances/${workoutInstanceId}/sets/${setId}`,
+        { setType }
+      );
+      return response;
+    } catch (error: any) {
+      throw new Error(error.message || 'Failed to convert set type');
+    }
+  },
+
+  async addSubSet(
+    workoutInstanceId: number,
+    exerciseId: number,
+    parentSetNumber: number,
+    weight: number,
+    reps: number
+  ): Promise<any> {
+    try {
+      // First, get existing sets to find the next subSetNumber
+      const workoutInstance = await this.getWorkoutInstance(workoutInstanceId);
+      const existingSets = workoutInstance.exerciseSets?.filter(
+        (set: any) => set.exerciseId === exerciseId && set.setNumber === parentSetNumber && set.subSetNumber != null
+      ) || [];
+      
+      const maxSubSetNumber = existingSets.length > 0
+        ? Math.max(...existingSets.map((set: any) => set.subSetNumber || 0))
+        : 0;
+      
+      const nextSubSetNumber = maxSubSetNumber + 1;
+
+      return await this.addSet(
+        workoutInstanceId,
+        exerciseId,
+        weight,
+        reps,
+        parentSetNumber,
+        nextSubSetNumber,
+        'DROP_SET' // Default to DROP_SET for sub-sets, can be changed later
+      );
+    } catch (error: any) {
+      throw new Error(error.message || 'Failed to add sub-set');
     }
   },
 

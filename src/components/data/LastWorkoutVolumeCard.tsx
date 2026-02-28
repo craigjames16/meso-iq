@@ -31,15 +31,15 @@ export const LastWorkoutVolumeCard: React.FC<LastWorkoutVolumeCardProps> = ({ me
   useEffect(() => {
     const fetchLastWorkoutVolume = async () => {
       // Show card if we have schedule data (history), even without mesocycleId
-      if (!schedule || !schedule.previousDays || schedule.previousDays.length === 0) {
+      if (!schedule || !schedule.workoutInstances || schedule.workoutInstances.length === 0) {
         setLoading(false);
         return;
       }
 
       try {
-        // Find the last completed workout (not rest day)
-        const completedWorkouts = schedule.previousDays.filter(
-          day => !day.planDay.isRestDay && day.workoutInstance?.completedAt
+        // Find the last completed workout
+        const completedWorkouts = schedule.workoutInstances.filter(
+          instance => instance.completedAt !== null
         );
 
         if (completedWorkouts.length === 0) {
@@ -49,39 +49,49 @@ export const LastWorkoutVolumeCard: React.FC<LastWorkoutVolumeCardProps> = ({ me
 
         // Get the most recent completed workout
         const lastWorkout = completedWorkouts.sort((a, b) => {
-          const dateA = a.workoutInstance?.completedAt 
-            ? new Date(a.workoutInstance.completedAt).getTime()
+          const dateA = a.completedAt 
+            ? new Date(a.completedAt).getTime()
             : 0;
-          const dateB = b.workoutInstance?.completedAt
-            ? new Date(b.workoutInstance.completedAt).getTime()
+          const dateB = b.completedAt
+            ? new Date(b.completedAt).getTime()
             : 0;
           return dateB - dateA;
         })[0];
 
-        if (!lastWorkout.workoutInstance?.id) {
+        if (!lastWorkout.id) {
           setLoading(false);
           return;
         }
 
         // Store the workout instance ID for navigation
-        setWorkoutInstanceId(lastWorkout.workoutInstance.id);
+        setWorkoutInstanceId(lastWorkout.id);
 
-        // Fetch the workout instance details to get exercise sets
-        const workoutInstance = await workoutService.getWorkoutInstance(
-          lastWorkout.workoutInstance.id
-        );
+        // Calculate total volume from exercise sets if available, otherwise fetch details
+        if (lastWorkout.exerciseSets && lastWorkout.exerciseSets.length > 0) {
+          const volume = lastWorkout.exerciseSets.reduce(
+            (total: number, set: any) => total + (set.weight * set.reps),
+            0
+          );
+          setTotalVolume(volume);
+          setLoading(false);
+        } else {
+          // Fetch the workout instance details to get exercise sets
+          const workoutInstance = await workoutService.getWorkoutInstance(
+            lastWorkout.id
+          );
 
-        // Calculate total volume: sum of (weight * reps) for all sets
-        const volume = (workoutInstance.exerciseSets || []).reduce(
-          (total: number, set: any) => total + (set.weight * set.reps),
-          0
-        );
+          // Calculate total volume: sum of (weight * reps) for all sets
+          const volume = (workoutInstance.exerciseSets || []).reduce(
+            (total: number, set: any) => total + (set.weight * set.reps),
+            0
+          );
 
-        setTotalVolume(volume);
+          setTotalVolume(volume);
+          setLoading(false);
+        }
       } catch (err) {
         console.error('Error fetching last workout volume:', err);
         setError(err instanceof Error ? err.message : 'Failed to fetch last workout volume');
-      } finally {
         setLoading(false);
       }
     };

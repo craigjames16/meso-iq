@@ -6,7 +6,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 import { workoutService } from '../services/workoutService';
-import { PlanInstanceDay } from '../types/workout';
+import { PlanInstanceDay, WorkoutInstance } from '../types/workout';
 import { themeColors, spacing, borderRadius } from '../theme/colors';
 import { useSchedule } from '../context/ScheduleContext';
 
@@ -19,7 +19,7 @@ type WorkoutCalendarNavigationProp = NativeStackNavigationProp<RootStackParamLis
 export const WorkoutCalendar: React.FC<WorkoutCalendarProps> = ({ mesocycleId }) => {
   const navigation = useNavigation<WorkoutCalendarNavigationProp>();
   const { schedule, loading, error, refreshSchedule } = useSchedule();
-  const [selectedDay, setSelectedDay] = useState<{ date: string; day: PlanInstanceDay | null } | null>(null);
+  const [selectedDay, setSelectedDay] = useState<{ date: string; workoutInstance: WorkoutInstance | null; upcomingDay: PlanInstanceDay | null } | null>(null);
   const [isStartingWorkout, setIsStartingWorkout] = useState(false);
   const [touchPosition, setTouchPosition] = useState<{ x: number; y: number } | null>(null);
   const calendarWrapperRef = useRef<View>(null);
@@ -27,23 +27,22 @@ export const WorkoutCalendar: React.FC<WorkoutCalendarProps> = ({ mesocycleId })
 
   // Process completed workouts and create map
   const { completedDates, completedDatesMap } = useMemo(() => {
-    if (!schedule) return { completedDates: [], completedDatesMap: new Map<string, PlanInstanceDay>() };
+    if (!schedule) return { completedDates: [], completedDatesMap: new Map<string, WorkoutInstance>() };
 
-    const completedWorkoutDays = schedule.previousDays.filter(
-      day => !day.planDay.isRestDay && day.workoutInstance?.completedAt
+    const completedWorkoutInstances = schedule.workoutInstances.filter(
+      instance => instance.completedAt !== null
     );
 
     const dates: Date[] = [];
-    const datesMap = new Map<string, PlanInstanceDay>();
+    const datesMap = new Map<string, WorkoutInstance>();
 
-    completedWorkoutDays.forEach(day => {
-      const completionDate = day.workoutInstance?.completedAt
-        ? new Date(day.workoutInstance.completedAt)
-        : new Date(day.updatedAt);
+    completedWorkoutInstances.forEach(instance => {
+      if (!instance.completedAt) return;
+      const completionDate = new Date(instance.completedAt);
       completionDate.setHours(0, 0, 0, 0);
       dates.push(completionDate);
       const dateKey = completionDate.toISOString().split('T')[0];
-      datesMap.set(dateKey, day);
+      datesMap.set(dateKey, instance);
     });
 
     return { completedDates: dates, completedDatesMap: datesMap };
@@ -190,60 +189,72 @@ export const WorkoutCalendar: React.FC<WorkoutCalendarProps> = ({ mesocycleId })
     }
     
     // Check if it's a completed workout
-    const completedDay = completedDatesMap.get(dateKey);
-    if (completedDay) {
-      setSelectedDay({ date: dateKey, day: completedDay });
+    const completedWorkout = completedDatesMap.get(dateKey);
+    if (completedWorkout) {
+      setSelectedDay({ date: dateKey, workoutInstance: completedWorkout, upcomingDay: null });
       return;
     }
 
     // Check if it's an upcoming workout
     const upcomingDay = upcomingDatesMap.get(dateKey);
     if (upcomingDay) {
-      setSelectedDay({ date: dateKey, day: upcomingDay });
+      setSelectedDay({ date: dateKey, workoutInstance: null, upcomingDay });
       return;
     }
   };
 
   const handleStartWorkout = async () => {
-    if (!selectedDay || !selectedDay.day || isStartingWorkout) return;
+    if (!selectedDay || isStartingWorkout) return;
 
-    const day = selectedDay.day;
     setIsStartingWorkout(true);
 
     try {
-      // Check if workout already exists
-      if (day.workoutInstance?.id) {
-        // Navigate to existing workout
+      // If it's a completed workout, navigate to it
+      if (selectedDay.workoutInstance) {
         setSelectedDay(null);
         setTouchPosition(null);
-        navigation.navigate('WorkoutDetail', { workoutInstanceId: day.workoutInstance.id });
+        navigation.navigate('WorkoutDetail', { workoutInstanceId: selectedDay.workoutInstance.id });
         return;
       }
 
-      // Check if it's a rest day
-      if (day.planDay?.isRestDay) {
-        if (day.planInstanceId && day.id) {
-          await workoutService.completeRestDay(day.planInstanceId, day.id);
-          // Refresh schedule
-          await refreshSchedule();
+      // If it's an upcoming day, handle it
+      if (selectedDay.upcomingDay) {
+        const day = selectedDay.upcomingDay;
+        
+        // Check if workout already exists
+        if (day.workoutInstance?.id) {
+          // Navigate to existing workout
+          setSelectedDay(null);
+          setTouchPosition(null);
+          navigation.navigate('WorkoutDetail', { workoutInstanceId: day.workoutInstance.id });
+          return;
         }
+
+        // Check if it's a rest day
+        if (day.planDay?.isRestDay) {
+          if (day.planInstanceId && day.id) {
+            await workoutService.completeRestDay(day.planInstanceId, day.id);
+            // Refresh schedule
+            await refreshSchedule();
+          }
+          setSelectedDay(null);
+          setTouchPosition(null);
+          return;
+        }
+
+        // Start new workout
+        if (!day.planInstanceId || !day.id) {
+          Alert.alert('Error', 'Missing required workout information');
+          setSelectedDay(null);
+          setTouchPosition(null);
+          return;
+        }
+
+        const workoutInstance = await workoutService.startWorkout(day.planInstanceId, day.id);
         setSelectedDay(null);
         setTouchPosition(null);
-        return;
+        navigation.navigate('WorkoutDetail', { workoutInstanceId: workoutInstance.id });
       }
-
-      // Start new workout
-      if (!day.planInstanceId || !day.id) {
-        Alert.alert('Error', 'Missing required workout information');
-        setSelectedDay(null);
-        setTouchPosition(null);
-        return;
-      }
-
-      const workoutInstance = await workoutService.startWorkout(day.planInstanceId, day.id);
-      setSelectedDay(null);
-      setTouchPosition(null);
-      navigation.navigate('WorkoutDetail', { workoutInstanceId: workoutInstance.id });
     } catch (err) {
       console.error('Error starting workout:', err);
       Alert.alert('Error', err instanceof Error ? err.message : 'Failed to start workout');
@@ -252,26 +263,35 @@ export const WorkoutCalendar: React.FC<WorkoutCalendarProps> = ({ mesocycleId })
     }
   };
 
-  const getWorkoutName = (day: PlanInstanceDay | null): string => {
-    if (!day) return '';
+  const getWorkoutName = (): string => {
+    if (!selectedDay) return '';
     
-    if (day.planDay?.isRestDay) {
-      return 'Rest Day';
+    // If it's a completed workout instance
+    if (selectedDay.workoutInstance) {
+      return selectedDay.workoutInstance.workout?.name || 'Workout';
     }
     
-    if (day.workoutInstance?.workout?.name) {
-      return day.workoutInstance.workout.name;
-    }
-    
-    if (day.planDay?.workout?.name) {
-      return day.planDay.workout.name;
+    // If it's an upcoming day
+    if (selectedDay.upcomingDay) {
+      const day = selectedDay.upcomingDay;
+      if (day.planDay?.isRestDay) {
+        return 'Rest Day';
+      }
+      
+      if (day.workoutInstance?.workout?.name) {
+        return day.workoutInstance.workout.name;
+      }
+      
+      if (day.planDay?.workout?.name) {
+        return day.planDay.workout.name;
+      }
     }
     
     return 'Workout';
   };
 
-  const isCompleted = selectedDay?.day?.workoutInstance?.completedAt;
-  const isRestDay = selectedDay?.day?.planDay?.isRestDay;
+  const isCompleted = selectedDay?.workoutInstance?.completedAt !== null && selectedDay?.workoutInstance?.completedAt !== undefined;
+  const isRestDay = selectedDay?.upcomingDay?.planDay?.isRestDay || false;
 
   return (
     <View style={styles.container}>
@@ -304,8 +324,8 @@ export const WorkoutCalendar: React.FC<WorkoutCalendarProps> = ({ mesocycleId })
           popoverStyle={styles.tooltipContainer}
         >
         <View style={styles.tooltipContent}>
-          <Text style={styles.tooltipTitle}>{getWorkoutName(selectedDay?.day || null)}</Text>
-          {selectedDay?.day && (
+          <Text style={styles.tooltipTitle}>{getWorkoutName()}</Text>
+          {selectedDay && (
             <Text style={styles.tooltipSubtitle}>
               {isRestDay 
                 ? 'Tap to complete rest day'
