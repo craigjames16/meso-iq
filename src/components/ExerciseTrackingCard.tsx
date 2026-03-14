@@ -13,9 +13,9 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
-import { workoutService } from '../services/workoutService';
 import { ExerciseHistoryModal, HistoryInstance } from './ExerciseHistoryModal';
 import { BottomDrawer } from './BottomDrawer';
+import { exercisesService } from '../services/exercisesService';
 import { themeColors, spacing, borderRadius } from '../theme/colors';
 
 export interface ExerciseSet {
@@ -232,26 +232,76 @@ export const ExerciseTrackingCard: React.FC<ExerciseTrackingCardProps> = ({
   onAddSubSet,
   onShowHistory,
 }) => {
+  console.log('ExerciseTrackingCard', exercise);
   const [exerciseMenuVisible, setExerciseMenuVisible] = useState(false);
   const [setMenuVisible, setSetMenuVisible] = useState(false);
   const [activeSetIndex, setActiveSetIndex] = useState<number | null>(null);
   const [historyModalVisible, setHistoryModalVisible] = useState(false);
+  const [exerciseDetail, setExerciseDetail] = useState<{
+    history: HistoryInstance[];
+    lastVolume: number | null;
+    lastSets: Array<{
+      setNumber: number;
+      reps: number;
+      weight: number;
+      subSetNumber?: number | null;
+      setType?: 'REGULAR' | 'DROP_SET' | 'MYO_REP';
+    }>;
+  } | null>(null);
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await exercisesService.getExercise(exercise.exerciseId);
+        if (cancelled) return;
+        const rawHistory = data.history ?? [];
+        const history: HistoryInstance[] = rawHistory
+          .filter((h) => h.completedAt != null)
+          .map((h) => ({
+            workoutInstanceId: h.workoutInstanceId,
+            volume: h.volume,
+            completedAt: h.completedAt as string | Date,
+            sets: h.sets ?? [],
+          }));
+        const lastEntry = history.length > 0 ? history[history.length - 1] : null;
+        const lastSets = lastEntry?.sets ?? [];
+        const lastVolume = lastEntry?.volume ?? null;
+        setExerciseDetail({
+          history,
+          lastVolume: lastVolume != null ? lastVolume : null,
+          lastSets: Array.isArray(lastSets) ? lastSets : [],
+        });
+      } catch {
+        if (!cancelled) setExerciseDetail({ history: [], lastVolume: null, lastSets: [] });
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [exercise.exerciseId]);
 
   const handleExerciseNamePress = () => {
     navigation.navigate('ExerciseDetail', { exerciseId: exercise.exerciseId });
   };
 
-  // Calculate last volume from mesocycle history
-  const getLastVolume = () => {
-    if (exercise.mesocycleHistory && exercise.mesocycleHistory.length > 0) {
-      const lastWorkout = exercise.mesocycleHistory[exercise.mesocycleHistory.length - 1];
-      return lastWorkout?.volume || 0;
-    }
-    return null;
+  const lastVolume = exerciseDetail?.lastVolume ?? null;
+
+  /** Find last-workout set that matches this row (same setNumber and subSetNumber for correct placeholders). */
+  const getLastSetForRow = (setNumber: number | undefined, subSetNumber: number | null | undefined) => {
+    if (setNumber == null) return null;
+    const lastSets = exerciseDetail?.lastSets ?? [];
+    return lastSets.find((s) => {
+      if (s.setNumber !== setNumber) return false;
+      const sSub = s.subSetNumber ?? null;
+      const rowSub = subSetNumber ?? null;
+      return sSub === rowSub;
+    }) ?? null;
   };
 
-  const lastVolume = getLastVolume();
+  const handleOpenHistory = () => {
+    setExerciseMenuVisible(false);
+    setHistoryModalVisible(true);
+  };
 
   const handleExerciseMenuOpen = () => {
     setExerciseMenuVisible(true);
@@ -390,11 +440,11 @@ export const ExerciseTrackingCard: React.FC<ExerciseTrackingCardProps> = ({
                   }}
                   keyboardType="numeric"
                   editable={!isWorkoutCompleted && !set.completed}
-                  placeholder={set.lastSet?.weight.toString() || '0'}
+                  placeholder={(getLastSetForRow(set.setNumber, set.subSetNumber)?.weight ?? set.lastSet?.weight)?.toString() || '0'}
                   placeholderTextColor="#666"
                 />
                 <Text style={styles.lastSetHint}>
-                  Last: {set.lastSet?.weight ?? '-'}
+                  Last: {(getLastSetForRow(set.setNumber, set.subSetNumber) ?? set.lastSet)?.weight ?? '-'}
                 </Text>
               </View>
               <View style={styles.inputGroup}>
@@ -411,11 +461,11 @@ export const ExerciseTrackingCard: React.FC<ExerciseTrackingCardProps> = ({
                   }}
                   keyboardType="numeric"
                   editable={!isWorkoutCompleted && !set.completed}
-                  placeholder={set.lastSet?.reps.toString() || '0'}
+                  placeholder={(getLastSetForRow(set.setNumber, set.subSetNumber)?.reps ?? set.lastSet?.reps)?.toString() || '0'}
                   placeholderTextColor="#666"
                 />
                 <Text style={styles.lastSetHint}>
-                  Last: {set.lastSet?.reps ?? '-'}
+                  Last: {(getLastSetForRow(set.setNumber, set.subSetNumber) ?? set.lastSet)?.reps ?? '-'}
                 </Text>
               </View>
             </View>
@@ -445,6 +495,11 @@ export const ExerciseTrackingCard: React.FC<ExerciseTrackingCardProps> = ({
         onClose={handleExerciseMenuClose}
         title={exercise.exerciseName}
         items={[
+          {
+            label: 'View History',
+            icon: 'history',
+            onPress: handleOpenHistory,
+          },
           {
             label: 'Move Up',
             icon: 'arrow-upward',
@@ -532,7 +587,7 @@ export const ExerciseTrackingCard: React.FC<ExerciseTrackingCardProps> = ({
         visible={historyModalVisible}
         onClose={() => setHistoryModalVisible(false)}
         exerciseName={exercise.exerciseName}
-        history={exercise.history || []}
+        history={exerciseDetail?.history ?? exercise.history ?? []}
       />
     </>
   );

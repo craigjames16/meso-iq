@@ -80,9 +80,10 @@ export const LastWorkoutVolumeCard: React.FC<LastWorkoutVolumeCardProps> = ({ me
             lastWorkout.id
           );
 
-          // Calculate total volume: sum of (weight * reps) for all sets
-          const volume = (workoutInstance.exerciseSets || []).reduce(
-            (total: number, set: any) => total + (set.weight * set.reps),
+          // Calculate total volume from nested workoutExercises[].sets
+          const volume = (workoutInstance.workoutExercises || []).reduce(
+            (total: number, we: any) =>
+              total + (we.sets || []).reduce((s: number, set: any) => s + (set.weight * set.reps), 0),
             0
           );
 

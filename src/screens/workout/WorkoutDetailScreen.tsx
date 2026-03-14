@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -14,7 +14,6 @@ import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { workoutService } from '../../services/workoutService';
 import type { RootStackParamList } from '../../navigation/AppNavigator';
 import { ExerciseTrackingCard, type ExerciseTracking, type ExerciseSet } from '../../components/ExerciseTrackingCard';
-import type { HistoryInstance } from '../../components/ExerciseHistoryModal';
 import { DropdownMenu, type DropdownMenuItem } from '../../components/DropdownMenu';
 import { ConfirmationModal } from '../../components/ConfirmationModal';
 import { AddExerciseModal } from '../../components/plan/AddExerciseModal';
@@ -22,22 +21,105 @@ import { exercisesService } from '../../services/exercisesService';
 import { ExerciseListItem } from '../../types/plan';
 import { themeColors, spacing, borderRadius } from '../../theme/colors';
 import { useSchedule } from '../../context/ScheduleContext';
+import { useWorkoutInstance } from '../../context/WorkoutInstanceContext';
 
 // Categories will be extracted from backend response
 
 type WorkoutDetailScreenRouteProp = RouteProp<RootStackParamList, 'WorkoutDetail'>;
 type WorkoutDetailScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'WorkoutDetail'>;
 
+/** Build trackings from workout instance (nested workoutExercises[].sets). No history/lastSet. */
+function buildTrackingsFromWorkoutInstance(workoutInstance: any): ExerciseTracking[] {
+  const workoutExercises = workoutInstance.workoutExercises ?? [];
+  const completed = !!workoutInstance.completedAt;
+
+  const trackings: ExerciseTracking[] = workoutExercises.map((workoutExercise: any) => {
+    const exerciseId = workoutExercise.exercise?.id ?? workoutExercise.exerciseId;
+    const exerciseName = workoutExercise.exercise?.name ?? '';
+    const order = workoutExercise.order ?? 0;
+    const nestedSets = workoutExercise.sets ?? [];
+
+    let sets: ExerciseSet[];
+
+    if (completed) {
+      sets = nestedSets.map((set: any) => ({
+        id: set.id,
+        reps: set.reps,
+        weight: set.weight,
+        setNumber: set.setNumber,
+        subSetNumber: set.subSetNumber ?? null,
+        setType: set.setType || 'REGULAR',
+        completed: true,
+      }));
+    } else {
+      if (nestedSets.length === 0) {
+        // No completed sets: leave empty; hydrate from last workout below
+        sets = [];
+      } else {
+        sets = nestedSets.map((set: any) => ({
+          id: set.id,
+          reps: set.reps,
+          weight: set.weight,
+          setNumber: set.setNumber,
+          subSetNumber: set.subSetNumber ?? null,
+          setType: set.setType || 'REGULAR',
+          completed: true,
+        }));
+      }
+    }
+
+    return {
+      exerciseId,
+      exerciseName,
+      order,
+      sets,
+    };
+  });
+
+  return trackings.sort((a, b) => a.order - b.order);
+}
+
+/** Build empty ExerciseSet[] from last workout's set structure (same count and types), with lastSet for placeholders. */
+function buildSetsFromLastWorkout(
+  lastSets: Array<{
+    weight: number;
+    reps: number;
+    setNumber: number;
+    subSetNumber?: number | null;
+    setType?: 'REGULAR' | 'DROP_SET' | 'MYO_REP';
+  }>
+): ExerciseSet[] {
+  if (!lastSets || lastSets.length === 0) {
+    return [
+      { reps: 0, weight: 0, setNumber: 1, subSetNumber: null, setType: 'REGULAR', completed: false },
+      { reps: 0, weight: 0, setNumber: 2, subSetNumber: null, setType: 'REGULAR', completed: false },
+    ];
+  }
+  return lastSets.map((s) => ({
+    reps: 0,
+    weight: 0,
+    setNumber: s.setNumber,
+    subSetNumber: s.subSetNumber ?? null,
+    setType: s.setType || 'REGULAR',
+    completed: false,
+    lastSet: { reps: s.reps, weight: s.weight, setNumber: s.setNumber },
+  }));
+}
+
 export const WorkoutDetailScreen: React.FC = () => {
   const route = useRoute<WorkoutDetailScreenRouteProp>();
   const navigation = useNavigation<WorkoutDetailScreenNavigationProp>();
   const { workoutInstanceId } = route.params;
   const { refreshSchedule } = useSchedule();
+  const {
+    workoutInstance,
+    loading,
+    error,
+    fetchWorkoutInstance,
+    refreshWorkoutInstance,
+  } = useWorkoutInstance();
 
-  const [workoutInstance, setWorkoutInstance] = useState<any>(null);
   const [exerciseTrackings, setExerciseTrackings] = useState<ExerciseTracking[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [completing, setCompleting] = useState(false);
   const [addExerciseModalVisible, setAddExerciseModalVisible] = useState(false);
   const [menuVisible, setMenuVisible] = useState(false);
@@ -46,197 +128,92 @@ export const WorkoutDetailScreen: React.FC = () => {
   const [creatingExercise, setCreatingExercise] = useState(false);
 
   useEffect(() => {
-    fetchWorkoutData();
-  }, [workoutInstanceId]);
+    fetchWorkoutInstance(workoutInstanceId);
+  }, [workoutInstanceId, fetchWorkoutInstance]);
 
-  const fetchWorkoutData = async () => {
+  useEffect(() => {
+    if (workoutInstance?.id === workoutInstanceId) {
+      setExerciseTrackings(buildTrackingsFromWorkoutInstance(workoutInstance));
+    }
+  }, [workoutInstance, workoutInstanceId]);
+
+  // When an exercise has no completed sets, hydrate from last workout (same count and types)
+  useEffect(() => {
+    if (!workoutInstance || workoutInstance.id !== workoutInstanceId || workoutInstance.completedAt) return;
+    const withEmptySets = exerciseTrackings
+      .map((t, index) => ({ tracking: t, index }))
+      .filter(({ tracking }) => tracking.sets.length === 0);
+    if (withEmptySets.length === 0) return;
+
+    let cancelled = false;
+    const hydrate = async () => {
+      const results = await Promise.all(
+        withEmptySets.map(async ({ tracking, index }) => {
+          try {
+            const data = await exercisesService.getExercise(tracking.exerciseId);
+            const rawHistory = data.history ?? [];
+            const completedHistory = rawHistory.filter((h) => h.completedAt != null);
+            const lastEntry = completedHistory.length > 0 ? completedHistory[completedHistory.length - 1] : null;
+            const lastSets = lastEntry?.sets ?? [];
+            return { index, sets: buildSetsFromLastWorkout(lastSets) };
+          } catch {
+            return {
+              index,
+              sets: [
+                { reps: 0, weight: 0, setNumber: 1, subSetNumber: null, setType: 'REGULAR', completed: false },
+                { reps: 0, weight: 0, setNumber: 2, subSetNumber: null, setType: 'REGULAR', completed: false },
+              ] as ExerciseSet[],
+            };
+          }
+        })
+      );
+      if (cancelled) return;
+      setExerciseTrackings((prev) => {
+        const next = [...prev];
+        let changed = false;
+        for (const { index, sets } of results) {
+          if (next[index].sets.length === 0) {
+            next[index] = { ...next[index], sets };
+            changed = true;
+          }
+        }
+        return changed ? next : prev;
+      });
+    };
+    hydrate();
+    return () => { cancelled = true; };
+  }, [workoutInstance, workoutInstanceId, exerciseTrackings]);
+
+  const fetchExercisesForModal = useCallback(async () => {
     try {
-      setLoading(true);
-      const [workoutData, exercisesData] = await Promise.all([
-        workoutService.getWorkoutInstance(workoutInstanceId),
-        workoutService.getExercises(),
-      ]);
-
-      setWorkoutInstance(workoutData);
-      
-      // Transform exercises data to ExerciseListItem[] format
+      const exercisesData = await workoutService.getExercises();
       let exercisesArray: ExerciseListItem[] = [];
-      
       if (exercisesData && typeof exercisesData === 'object' && Object.keys(exercisesData).length === 0) {
         setAvailableExercises([]);
-      } else if (Array.isArray(exercisesData)) {
-        // If it's already an array, normalize categories to uppercase
+        return;
+      }
+      if (Array.isArray(exercisesData)) {
         exercisesArray = exercisesData.map((exercise: any) => ({
           ...exercise,
           category: (exercise.category || '').toUpperCase(),
           highestWeight: exercise.highestWeight || 0,
         }));
-        setAvailableExercises(exercisesArray);
       } else if (typeof exercisesData === 'object' && exercisesData !== null) {
-        // If it's an object with categories, flatten it
         exercisesArray = Object.entries(exercisesData).flatMap(([category, exerciseList]: [string, any]) => {
-          if (!Array.isArray(exerciseList)) {
-            console.warn(`Exercise list for category ${category} is not an array:`, exerciseList);
-            return [];
-          }
+          if (!Array.isArray(exerciseList)) return [];
           return exerciseList.map((exercise: any) => ({
             ...exercise,
-            // Prefer exercise's own category property, fall back to object key, normalize to uppercase
             category: (exercise.category || category || '').toUpperCase(),
             highestWeight: exercise.highestWeight || 0,
           }));
         });
-        setAvailableExercises(exercisesArray);
-      } else {
-        console.warn('Unexpected exercises data format:', typeof exercisesData, exercisesData);
-        setAvailableExercises([]);
       }
-      
-      // Get current mesocycle ID from workout data
-      const currentMesocycleId = workoutData.mesocycleId || 
-        workoutData.planInstanceDays?.[0]?.planInstance?.mesocycle?.id;
-
-      // Process exercise sets - sets are already ordered by setNumber, subSetNumber from API
-      const completedSetsMap = workoutData.exerciseSets?.reduce((acc: Record<number, any[]>, set: any) => {
-        if (!acc[set.exerciseId]) {
-          acc[set.exerciseId] = [];
-        }
-        acc[set.exerciseId].push({
-          id: set.id,
-          reps: set.reps,
-          weight: set.weight,
-          setNumber: set.setNumber,
-          subSetNumber: set.subSetNumber ?? null,
-          setType: set.setType || 'REGULAR',
-        });
-        return acc;
-      }, {}) || {};
-
-      const initialTrackings = workoutData.workoutExercises.map((workoutExercise: any) => {
-        let sets: ExerciseSet[];
-
-        if (workoutData.completedAt) {
-          // For completed workouts, use all sets from API (already ordered)
-          sets = (completedSetsMap[workoutExercise.exercise.id] || []).map((set: any) => ({
-            ...set,
-            completed: true,
-          }));
-        } else {
-          // For active workouts, merge completed sets with template sets
-          const completedSets = completedSetsMap[workoutExercise.exercise.id] || [];
-          const numSets = workoutExercise.lastSets?.length || 3;
-          
-          // Group sets by setNumber to handle sub-sets
-          const setsByNumber = new Map<number, any[]>();
-          completedSets.forEach((set: any) => {
-            if (!setsByNumber.has(set.setNumber)) {
-              setsByNumber.set(set.setNumber, []);
-            }
-            setsByNumber.get(set.setNumber)!.push(set);
-          });
-
-          // Build sets array - include main sets and their sub-sets
-          sets = [];
-          for (let setNum = 1; setNum <= numSets; setNum++) {
-            const setsForThisNumber = setsByNumber.get(setNum) || [];
-            const mainSet = setsForThisNumber.find((s: any) => s.subSetNumber === null || s.subSetNumber === undefined);
-            const subSets = setsForThisNumber.filter((s: any) => s.subSetNumber !== null && s.subSetNumber !== undefined)
-              .sort((a: any, b: any) => (a.subSetNumber || 0) - (b.subSetNumber || 0));
-            
-            const matchingLastSet = workoutExercise.lastSets?.find(
-              (lastSet: { setNumber: number; reps: number; weight: number }) => lastSet.setNumber === setNum
-            );
-
-            // Add main set
-            if (mainSet) {
-              sets.push({
-                id: mainSet.id,
-                reps: mainSet.reps,
-                weight: mainSet.weight,
-                setNumber: mainSet.setNumber,
-                subSetNumber: null,
-                setType: mainSet.setType || 'REGULAR',
-                completed: true,
-                lastSet: matchingLastSet || null,
-              });
-            } else {
-              sets.push({
-                reps: 0,
-                weight: 0,
-                setNumber: setNum,
-                subSetNumber: null,
-                setType: 'REGULAR',
-                completed: false,
-                lastSet: matchingLastSet || null,
-              });
-            }
-
-            // Add sub-sets
-            subSets.forEach((subSet: any) => {
-              sets.push({
-                id: subSet.id,
-                reps: subSet.reps,
-                weight: subSet.weight,
-                setNumber: subSet.setNumber,
-                subSetNumber: subSet.subSetNumber,
-                setType: subSet.setType || 'REGULAR',
-                completed: true,
-                lastSet: null,
-              });
-            });
-          }
-        }
-
-        // Find the exercise history from available exercises
-        const currentExercise = exercisesArray.find(
-          (ex: any) => ex.id === workoutExercise.exercise.id
-        );
-        
-        // Get all workout instances for this exercise (history)
-        const history: HistoryInstance[] = currentExercise?.workoutInstances
-          ?.filter((instance: any) => instance.completedAt)
-          ?.map((instance: any) => ({
-            workoutInstanceId: instance.workoutInstanceId,
-            volume: instance.volume,
-            completedAt: instance.completedAt,
-            sets: instance.sets || [],
-          })) || [];
-        
-        // Filter mesocycle-specific history (same mesocycle, but not current workout)
-        const mesocycleHistory: HistoryInstance[] = currentExercise?.workoutInstances
-          ?.filter((instance: any) => 
-            instance.mesocycleId === currentMesocycleId && 
-            instance.workoutInstanceId !== workoutData.id &&
-            instance.completedAt
-          )
-          ?.sort((a: any, b: any) => 
-            new Date(a.completedAt).getTime() - new Date(b.completedAt).getTime()
-          )
-          ?.map((instance: any) => ({
-            workoutInstanceId: instance.workoutInstanceId,
-            volume: instance.volume,
-            completedAt: instance.completedAt,
-            sets: instance.sets || [],
-          })) || [];
-
-        return {
-          exerciseId: workoutExercise.exercise.id,
-          exerciseName: workoutExercise.exercise.name,
-          sets,
-          order: workoutExercise.order,
-          history,
-          mesocycleHistory,
-        };
-      });
-
-      setExerciseTrackings(initialTrackings.sort((a: ExerciseTracking, b: ExerciseTracking) => a.order - b.order));
+      setAvailableExercises(exercisesArray);
     } catch (err) {
-      console.error('Error fetching workout data:', err);
-      setError(err instanceof Error ? err.message : 'Failed to fetch workout data');
-    } finally {
-      setLoading(false);
+      console.error('Error fetching exercises:', err);
+      setAvailableExercises([]);
     }
-  };
+  }, []);
 
   const handleUpdateSet = (
     exerciseIndex: number,
@@ -360,29 +337,15 @@ export const WorkoutDetailScreen: React.FC = () => {
     try {
       setCompleting(true);
       setEndWorkoutConfirmVisible(false);
-      const workoutData = await workoutService.completeWorkout(workoutInstanceId);
-      setWorkoutInstance((prev: any) =>
-        prev
-          ? {
-              ...prev,
-              completedAt: workoutData.completedAt,
-            }
-          : null
-      );
-      
-      // Refresh schedule to update the calendar and other components
+      await workoutService.completeWorkout(workoutInstanceId);
+      await refreshWorkoutInstance();
       try {
         await refreshSchedule();
       } catch (scheduleError) {
-        // Don't fail the workout completion if schedule refresh fails
         console.error('Error refreshing schedule:', scheduleError);
       }
-      
       Alert.alert('Success', 'Workout completed!', [
-        {
-          text: 'OK',
-          onPress: () => navigation.goBack(),
-        },
+        { text: 'OK', onPress: () => navigation.goBack() },
       ]);
     } catch (err) {
       console.error('Error completing workout:', err);
@@ -396,17 +359,10 @@ export const WorkoutDetailScreen: React.FC = () => {
     setExerciseTrackings((prev) => {
       const updated = [...prev];
       const exercise = updated[exerciseIndex];
-      
-      // Find the next main set number (skip sub-sets)
       const mainSets = exercise.sets.filter(s => s.subSetNumber === null || s.subSetNumber === undefined);
-      const nextSetNumber = mainSets.length > 0 
+      const nextSetNumber = mainSets.length > 0
         ? Math.max(...mainSets.map(s => s.setNumber || 0)) + 1
         : exercise.sets.length + 1;
-      
-      const matchingLastSet = workoutInstance?.workoutExercises
-        ?.find((we: any) => we.exercise.id === exercise.exerciseId)
-        ?.lastSets?.find((ls: any) => ls.setNumber === nextSetNumber);
-
       updated[exerciseIndex] = {
         ...exercise,
         sets: [
@@ -417,7 +373,7 @@ export const WorkoutDetailScreen: React.FC = () => {
             setNumber: nextSetNumber,
             subSetNumber: null,
             setType: 'REGULAR',
-            lastSet: matchingLastSet || null,
+            completed: false,
           },
         ],
       };
@@ -427,11 +383,10 @@ export const WorkoutDetailScreen: React.FC = () => {
 
   const handleRemoveExercise = async (exerciseIndex: number) => {
     const exercise = exerciseTrackings[exerciseIndex];
-    
     try {
       await workoutService.removeExercise(workoutInstanceId, exercise.exerciseId);
-      // Refresh workout data
-      await fetchWorkoutData();
+      const updated = await refreshWorkoutInstance();
+      if (updated) setExerciseTrackings(buildTrackingsFromWorkoutInstance(updated));
     } catch (err) {
       console.error('Error removing exercise:', err);
       Alert.alert('Error', err instanceof Error ? err.message : 'Failed to remove exercise');
@@ -442,19 +397,8 @@ export const WorkoutDetailScreen: React.FC = () => {
     try {
       const exercise = exerciseTrackings[exerciseIndex];
       await workoutService.reorderExercise(workoutInstanceId, exercise.exerciseId, direction);
-
-      setExerciseTrackings((prev) => {
-        const updated = [...prev];
-        const targetIndex = direction === 'up' ? exerciseIndex - 1 : exerciseIndex + 1;
-
-        if (targetIndex >= 0 && targetIndex < updated.length) {
-          [updated[exerciseIndex], updated[targetIndex]] = [updated[targetIndex], updated[exerciseIndex]];
-          updated[exerciseIndex].order = exerciseIndex;
-          updated[targetIndex].order = targetIndex;
-        }
-
-        return updated;
-      });
+      const updated = await refreshWorkoutInstance();
+      if (updated) setExerciseTrackings(buildTrackingsFromWorkoutInstance(updated));
     } catch (err) {
       console.error('Error reordering exercise:', err);
       Alert.alert('Error', err instanceof Error ? err.message : 'Failed to reorder exercise');
@@ -639,99 +583,24 @@ export const WorkoutDetailScreen: React.FC = () => {
     });
   };
 
-  const addExerciseToTracking = (workoutData: any, exercise: ExerciseListItem, currentMesocycleId: number | null) => {
-    // Find the newly added exercise in workout data
-    const newExercise = workoutData.workoutExercises.find(
-      (ex: any) => ex.exercise.id === exercise.id
-    );
-
-    if (!newExercise) {
-      return null;
-    }
-
-    // Use exercise data from API response if available, otherwise fall back to exercise parameter
-    const exerciseData = newExercise.exercise || exercise;
-
-    // Get all workout instances for this exercise (history)
-    const history: HistoryInstance[] = exerciseData.workoutInstances
-      ?.filter((instance: any) => instance.completedAt)
-      ?.map((instance: any) => ({
-        workoutInstanceId: instance.workoutInstanceId,
-        volume: instance.volume,
-        completedAt: instance.completedAt,
-        sets: instance.sets || [],
-      })) || [];
-    
-    // Filter mesocycle-specific history
-    const mesocycleHistory: HistoryInstance[] = exerciseData.workoutInstances
-      ?.filter((instance: any) => 
-        instance.mesocycleId === currentMesocycleId && 
-        instance.workoutInstanceId !== workoutData.id &&
-        instance.completedAt
-      )
-      ?.sort((a: any, b: any) => 
-        new Date(a.completedAt).getTime() - new Date(b.completedAt).getTime()
-      )
-      ?.map((instance: any) => ({
-        workoutInstanceId: instance.workoutInstanceId,
-        volume: instance.volume,
-        completedAt: instance.completedAt,
-        sets: instance.sets || [],
-      })) || [];
-
-    const numSets = newExercise.lastSets?.length || 3;
-    return {
-      exerciseId: newExercise.exercise.id,
-      exerciseName: newExercise.exercise.name,
-      order: newExercise.order,
-      sets: Array.from({ length: numSets }, (_, index) => {
-        const matchingLastSet = newExercise.lastSets?.find(
-          (lastSet: any) => lastSet.setNumber === index + 1
-        );
-        return {
-          reps: 0,
-          weight: 0,
-          setNumber: index + 1,
-          subSetNumber: null,
-          setType: 'REGULAR',
-          lastSet: matchingLastSet || null,
-        };
-      }),
-      history,
-      mesocycleHistory,
-    } as ExerciseTracking;
-  };
-
   const handleSelectExercises = async (exercises: ExerciseListItem[]) => {
     try {
       const exerciseIds = exercises.map((ex) => ex.id);
-      const workoutData = await workoutService.addExercise(workoutInstanceId, exerciseIds);
-      setWorkoutInstance(workoutData);
-
-      // Get current mesocycle ID
-      const currentMesocycleId = workoutData.mesocycleId || 
-        workoutData.planInstanceDays?.[0]?.planInstance?.mesocycle?.id;
-
-      // Process all newly added exercises
-      const newExerciseTrackings: ExerciseTracking[] = exercises
-        .map((exercise) => addExerciseToTracking(workoutData, exercise, currentMesocycleId))
-        .filter((tracking): tracking is ExerciseTracking => tracking !== null);
-
-      setExerciseTrackings((prev) => {
-        const updated = [...prev, ...newExerciseTrackings];
-        return updated.sort((a, b) => a.order - b.order);
-      });
-
+      await workoutService.addExercise(workoutInstanceId, exerciseIds);
+      const updated = await refreshWorkoutInstance();
+      if (updated) setExerciseTrackings(buildTrackingsFromWorkoutInstance(updated));
       setAddExerciseModalVisible(false);
     } catch (err: any) {
       console.error('Error adding exercises:', err);
-      
-      // Extract error message - check multiple possible locations
       const errorMessage = err?.message || err?.error || err?.errorData?.message || 'Failed to add exercises';
-      
       Alert.alert('Error', errorMessage);
     }
   };
+
+  const openAddExerciseModal = useCallback(() => {
+    fetchExercisesForModal();
+    setAddExerciseModalVisible(true);
+  }, [fetchExercisesForModal]);
 
   const handleCreateExercise = async (name: string, category: string) => {
     try {
@@ -840,7 +709,7 @@ export const WorkoutDetailScreen: React.FC = () => {
                 styles.addExerciseEmptyButton,
                 isWorkoutCompleted && styles.addExerciseEmptyButtonDisabled
               ]}
-              onPress={() => setAddExerciseModalVisible(true)}
+              onPress={openAddExerciseModal}
               disabled={isWorkoutCompleted}
             >
               <MaterialIcons name="add" size={20} color="#fff" />
@@ -902,7 +771,7 @@ export const WorkoutDetailScreen: React.FC = () => {
           {
             label: 'Add Exercise',
             icon: 'add',
-            onPress: () => setAddExerciseModalVisible(true),
+            onPress: openAddExerciseModal,
             disabled: isWorkoutCompleted,
           },
           {
