@@ -8,7 +8,7 @@ const getApiUrl = (): string => {
     return 'http://10.0.0.208:3000';
   }
   // Production: your deployed API URL
-  return 'https://tracker.craigchisholm.me';
+  return 'https://api.meso-iq.com';
 };
 
 export const API_URL = getApiUrl();
@@ -20,6 +20,8 @@ export const API_ENDPOINTS = {
     SESSION: '/api/auth/mobile/session',
     SIGNOUT: '/api/auth/mobile/signout',
   },
+  /** Current user (soft-delete account) */
+  USERS: '/api/users',
   MESOCYCLES: {
     LIST: '/api/mesocycles',
     GET: (id: number) => `/api/mesocycles/${id}`,

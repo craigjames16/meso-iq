@@ -45,27 +45,30 @@ class ApiClient {
     }
     
     if (!response.ok) {
-      let errorData: any = {
-        message: response.statusText || 'An error occurred',
-      };
+      let errorData: Record<string, unknown> = {};
 
-      // Try to parse as JSON if content type indicates JSON
-      if (isJson && text) {
+      const trimmed = text?.trim() ?? '';
+      const looksLikeJson = trimmed.startsWith('{') || trimmed.startsWith('[');
+
+      if (trimmed && (isJson || looksLikeJson)) {
         try {
-          errorData = JSON.parse(text);
-        } catch (e) {
-          // If JSON parse fails, use the text as the message
-          errorData.message = text || response.statusText || 'An error occurred';
+          errorData = JSON.parse(text) as Record<string, unknown>;
+        } catch {
+          errorData = { message: text || response.statusText || 'An error occurred' };
         }
-      } else if (text) {
-        errorData.message = text;
+      } else if (trimmed) {
+        errorData = { message: text };
+      } else {
+        errorData = { message: response.statusText || 'An error occurred' };
       }
 
-      const errorMessage = errorData.message || errorData.error || 'An error occurred';
-      const error: ApiError = {
-        message: errorMessage,
-        status: response.status,
-      };
+      const errField = errorData.error;
+      const msgField = errorData.message;
+      const errorMessage =
+        (typeof errField === 'string' && errField) ||
+        (typeof msgField === 'string' && msgField) ||
+        response.statusText ||
+        'An error occurred';
 
       // Handle 401 Unauthorized - token expired or invalid
       if (response.status === 401) {

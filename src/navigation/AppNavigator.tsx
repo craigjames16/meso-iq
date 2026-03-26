@@ -12,7 +12,6 @@ import { EditPlanScreen } from '../screens/plan/EditPlanScreen';
 import { MesocycleDetailScreen } from '../screens/mesocycle/MesocycleDetailScreen';
 import { HeatmapScreen } from '../screens/main/HeatmapScreen';
 import { ExerciseDetailScreen } from '../screens/exercise/ExerciseDetailScreen';
-import type { MainTabParamList } from './MainNavigator';
 
 export type RootStackParamList = {
   Main: undefined;
@@ -28,9 +27,9 @@ export type RootStackParamList = {
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export const AppNavigator: React.FC = () => {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isHydrating } = useAuth();
 
-  if (isLoading) {
+  if (isHydrating) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#007AFF" />
@@ -57,7 +56,7 @@ export const AppNavigator: React.FC = () => {
               headerStyle: { backgroundColor: '#1a1a1a' },
               headerTintColor: '#fff',
               headerTitleStyle: { fontWeight: 'bold' },
-              title: 'Workout',
+              title: 'Workout', // fallback until screen sets Week X - Day Y
             }}
           />
           <Stack.Screen 

@@ -6,7 +6,7 @@ import { storage } from '../utils/storage';
 const initialState: AuthState = {
   user: null,
   token: null,
-  isLoading: true,
+  isHydrating: true,
   isAuthenticated: false,
 };
 
@@ -31,7 +31,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           setState({
             user: user as User,
             token,
-            isLoading: false,
+            isHydrating: false,
             isAuthenticated: true,
           });
         } else {
@@ -40,7 +40,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           setState({
             user: null,
             token: null,
-            isLoading: false,
+            isHydrating: false,
             isAuthenticated: false,
           });
         }
@@ -48,7 +48,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setState({
           user: null,
           token: null,
-          isLoading: false,
+          isHydrating: false,
           isAuthenticated: false,
         });
       }
@@ -58,7 +58,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setState({
         user: null,
         token: null,
-        isLoading: false,
+        isHydrating: false,
         isAuthenticated: false,
       });
     }
@@ -70,18 +70,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const signIn = useCallback(async (credentials: SignInCredentials) => {
     try {
-      setState((prev) => ({ ...prev, isLoading: true }));
       const response = await authService.signIn(credentials);
       setState({
         user: response.user,
         token: response.token,
-        isLoading: false,
+        isHydrating: false,
         isAuthenticated: true,
       });
     } catch (error: any) {
       setState((prev) => ({
         ...prev,
-        isLoading: false,
         isAuthenticated: false,
       }));
       throw error;
@@ -90,32 +88,39 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const signUp = useCallback(async (credentials: SignUpCredentials) => {
     try {
-      setState((prev) => ({ ...prev, isLoading: true }));
       const response = await authService.signUp(credentials);
       setState({
         user: response.user,
         token: response.token,
-        isLoading: false,
+        isHydrating: false,
         isAuthenticated: true,
       });
     } catch (error: any) {
       setState((prev) => ({
         ...prev,
-        isLoading: false,
         isAuthenticated: false,
       }));
       throw error;
     }
   }, []);
 
+  const deleteAccount = useCallback(async () => {
+    await authService.deleteAccount();
+    setState({
+      user: null,
+      token: null,
+      isHydrating: false,
+      isAuthenticated: false,
+    });
+  }, []);
+
   const signOut = useCallback(async () => {
     try {
-      setState((prev) => ({ ...prev, isLoading: true }));
       await authService.signOut();
       setState({
         user: null,
         token: null,
-        isLoading: false,
+        isHydrating: false,
         isAuthenticated: false,
       });
     } catch (error: any) {
@@ -123,7 +128,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setState({
         user: null,
         token: null,
-        isLoading: false,
+        isHydrating: false,
         isAuthenticated: false,
       });
       throw error;
@@ -137,22 +142,22 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setState({
           user: session.user,
           token: session.token,
-          isLoading: false,
+          isHydrating: false,
           isAuthenticated: true,
         });
       } else {
         setState({
           user: null,
           token: null,
-          isLoading: false,
+          isHydrating: false,
           isAuthenticated: false,
         });
       }
-    } catch (error) {
+    } catch {
       setState({
         user: null,
         token: null,
-        isLoading: false,
+        isHydrating: false,
         isAuthenticated: false,
       });
     }
@@ -164,6 +169,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     signUp,
     signOut,
     refreshSession,
+    deleteAccount,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

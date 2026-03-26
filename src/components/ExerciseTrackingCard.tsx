@@ -51,7 +51,7 @@ interface ExerciseTrackingCardProps {
   totalExercises: number;
   workoutInstance?: any;
   onUpdateSet: (exerciseIndex: number, setIndex: number, field: 'reps' | 'weight', value: number) => void;
-  onSetCompletion: (exerciseIndex: number, setIndex: number, completed: boolean) => Promise<void>;
+  onSetCompletion: (exerciseIndex: number, setIndex: number, completed: boolean, recommendedReps?: number) => Promise<void>;
   onAddSet: (exerciseIndex: number) => void;
   onRemoveExercise: (exerciseIndex: number) => void;
   onReorderExercise: (exerciseIndex: number, direction: 'up' | 'down') => void;
@@ -298,6 +298,16 @@ export const ExerciseTrackingCard: React.FC<ExerciseTrackingCardProps> = ({
     }) ?? null;
   };
 
+  /** Recommended reps for this row: last reps + 1 (uses getLastSetForRow, with optional fallback). */
+  const getRecommendedReps = (
+    setNumber: number | undefined,
+    subSetNumber: number | null | undefined,
+    fallbackReps?: number | null
+  ): number => {
+    const lastReps = getLastSetForRow(setNumber, subSetNumber)?.reps ?? fallbackReps;
+    return (lastReps ?? 0) + 1;
+  };
+
   const handleOpenHistory = () => {
     setExerciseMenuVisible(false);
     setHistoryModalVisible(true);
@@ -461,7 +471,7 @@ export const ExerciseTrackingCard: React.FC<ExerciseTrackingCardProps> = ({
                   }}
                   keyboardType="numeric"
                   editable={!isWorkoutCompleted && !set.completed}
-                  placeholder={(getLastSetForRow(set.setNumber, set.subSetNumber)?.reps ?? set.lastSet?.reps)?.toString() || '0'}
+                  placeholder={getRecommendedReps(set.setNumber, set.subSetNumber, set.lastSet?.reps).toString()}
                   placeholderTextColor="#666"
                 />
                 <Text style={styles.lastSetHint}>
@@ -474,7 +484,14 @@ export const ExerciseTrackingCard: React.FC<ExerciseTrackingCardProps> = ({
                 styles.completeButton,
                 set.completed ? styles.completeButtonActive : styles.completeButtonInactive,
               ]}
-              onPress={() => onSetCompletion(exerciseIndex, setIndex, !set.completed)}
+              onPress={() => {
+                const completed = !set.completed;
+                const recommendedReps =
+                  completed && !set.reps
+                    ? getRecommendedReps(set.setNumber, set.subSetNumber, set.lastSet?.reps)
+                    : undefined;
+                onSetCompletion(exerciseIndex, setIndex, completed, recommendedReps);
+              }}
               disabled={isWorkoutCompleted || set.loading}
             >
               {set.loading ? (

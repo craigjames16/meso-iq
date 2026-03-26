@@ -7,7 +7,8 @@ export interface User {
 export interface AuthState {
   user: User | null;
   token: string | null;
-  isLoading: boolean;
+  /** True only while restoring session from storage on app launch — keeps navigation mounted. */
+  isHydrating: boolean;
   isAuthenticated: boolean;
 }
 
@@ -31,6 +32,7 @@ export interface AuthContextType extends AuthState {
   signUp: (credentials: SignUpCredentials) => Promise<void>;
   signOut: () => Promise<void>;
   refreshSession: () => Promise<void>;
+  deleteAccount: () => Promise<void>;
 }
 
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
+  Animated,
 } from 'react-native';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -27,6 +28,9 @@ import { useWorkoutInstance } from '../../context/WorkoutInstanceContext';
 
 type WorkoutDetailScreenRouteProp = RouteProp<RootStackParamList, 'WorkoutDetail'>;
 type WorkoutDetailScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'WorkoutDetail'>;
+
+const SCROLL_THRESHOLD = 60;
+const MESOCYCLE_NAME_MAX_LENGTH = 18;
 
 /** Build trackings from workout instance (nested workoutExercises[].sets). No history/lastSet. */
 function buildTrackingsFromWorkoutInstance(workoutInstance: any): ExerciseTracking[] {
@@ -126,6 +130,7 @@ export const WorkoutDetailScreen: React.FC = () => {
   const [endWorkoutConfirmVisible, setEndWorkoutConfirmVisible] = useState(false);
   const [availableExercises, setAvailableExercises] = useState<ExerciseListItem[]>([]);
   const [creatingExercise, setCreatingExercise] = useState(false);
+  const scrollY = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     fetchWorkoutInstance(workoutInstanceId);
@@ -136,6 +141,37 @@ export const WorkoutDetailScreen: React.FC = () => {
       setExerciseTrackings(buildTrackingsFromWorkoutInstance(workoutInstance));
     }
   }, [workoutInstance, workoutInstanceId]);
+
+  // Set nav header title (Week X - Day Y) and menu button
+  useEffect(() => {
+    if (!workoutInstance || workoutInstance.id !== workoutInstanceId) return;
+    const planDay = workoutInstance.planInstanceDays?.[0]?.planDay;
+    const planInstance = workoutInstance.planInstanceDays?.[0]?.planInstance;
+    const hasPlanContext = planDay != null && planInstance != null;
+    const week = planInstance?.iterationNumber;
+    const day = planDay?.dayNumber;
+    const title =
+      hasPlanContext && typeof week === 'number' && typeof day === 'number'
+        ? `Week ${week} - Day ${day}`
+        : workoutInstance.workout?.name || 'Workout';
+    const isWorkoutCompleted = !!workoutInstance.completedAt;
+    navigation.setOptions({
+      title,
+      headerRight: () => (
+        <TouchableOpacity
+          onPress={() => setMenuVisible(true)}
+          disabled={isWorkoutCompleted}
+          style={{ padding: 8 }}
+        >
+          <MaterialIcons
+            name="more-vert"
+            size={24}
+            color={isWorkoutCompleted ? '#666' : '#999'}
+          />
+        </TouchableOpacity>
+      ),
+    });
+  }, [workoutInstance, workoutInstanceId, navigation]);
 
   // When an exercise has no completed sets, hydrate from last workout (same count and types)
   useEffect(() => {
@@ -226,20 +262,19 @@ export const WorkoutDetailScreen: React.FC = () => {
       updated[exerciseIndex] = {
         ...updated[exerciseIndex],
         sets: updated[exerciseIndex].sets.map((set, idx) =>
-          field === 'weight' && !set.completed
-            ? idx >= setIndex
-              ? { ...set, weight: value }
-              : set
-            : idx === setIndex
-            ? { ...set, [field]: value }
-            : set
+          idx === setIndex ? { ...set, [field]: value } : set
         ),
       };
       return updated;
     });
   };
 
-  const handleSetCompletion = async (exerciseIndex: number, setIndex: number, completed: boolean) => {
+  const handleSetCompletion = async (
+    exerciseIndex: number,
+    setIndex: number,
+    completed: boolean,
+    recommendedReps?: number
+  ) => {
     const tracking = exerciseTrackings[exerciseIndex];
     const set = tracking.sets[setIndex];
 
@@ -274,9 +309,9 @@ export const WorkoutDetailScreen: React.FC = () => {
         Alert.alert('Error', err instanceof Error ? err.message : 'Failed to delete set');
       }
     } else if (completed) {
-      // Add set - optimistic update
+      // Add set - optimistic update (use recommended reps when user left reps empty)
       const weightToUse = set.weight || set.lastSet?.weight || 0;
-      const repsToUse = set.reps || set.lastSet?.reps || 0;
+      const repsToUse = set.reps || (recommendedReps ?? set.lastSet?.reps ?? 0);
 
       // Optimistically mark as completed and loading
       setExerciseTrackings((prev) => {
@@ -675,29 +710,71 @@ export const WorkoutDetailScreen: React.FC = () => {
     tracking.sets?.every((set) => set.completed === true)
   );
 
+  const planDay = workoutInstance.planInstanceDays?.[0]?.planDay;
+  const planInstance = workoutInstance.planInstanceDays?.[0]?.planInstance;
+  const hasPlanContext = planDay != null && planInstance != null;
+  const mesocycleName = planInstance?.mesocycle?.name;
+  const rir = planInstance?.rir;
+
+  const detailsOpacity = scrollY.interpolate({
+    inputRange: [0, SCROLL_THRESHOLD],
+    outputRange: [1, 0],
+    extrapolate: 'clamp',
+  });
+  const detailsMaxHeight = scrollY.interpolate({
+    inputRange: [0, SCROLL_THRESHOLD],
+    outputRange: [120, 0],
+    extrapolate: 'clamp',
+  });
+  const headerPaddingTop = scrollY.interpolate({
+    inputRange: [0, SCROLL_THRESHOLD],
+    outputRange: [16, 0],
+    extrapolate: 'clamp',
+  });
+  const headerPaddingBottom = scrollY.interpolate({
+    inputRange: [0, SCROLL_THRESHOLD],
+    outputRange: [12, 0],
+    extrapolate: 'clamp',
+  });
+
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerContent}>
-          <View style={styles.headerText}>
-            <Text style={styles.workoutName}>{workoutInstance.workout?.name || 'Workout'}</Text>
-            <Text style={styles.progressText}>
-              {completedSets}/{totalSets} sets completed
-            </Text>
+      {/* Collapsible details: mesocycle subtitle + RIR & sets chips */}
+      <Animated.View style={[styles.header, { paddingTop: headerPaddingTop, paddingBottom: headerPaddingBottom }]}>
+        <Animated.View style={[styles.headerDetails, { opacity: detailsOpacity, maxHeight: detailsMaxHeight, overflow: 'hidden' }]}>
+          <View style={styles.headerRow}>
+            {mesocycleName ? (
+              <Text style={styles.mesocycleSubtitle} numberOfLines={1}>
+                {mesocycleName.length > MESOCYCLE_NAME_MAX_LENGTH
+                  ? `${mesocycleName.slice(0, MESOCYCLE_NAME_MAX_LENGTH)}…`
+                  : mesocycleName}
+              </Text>
+            ) : <View style={styles.mesocycleSubtitlePlaceholder} />}
+            <View style={styles.headerChips}>
+              {hasPlanContext && rir != null && (
+                <View style={styles.headerMetaChip}>
+                  <Text style={styles.headerMetaChipText}>RIR {rir}</Text>
+                </View>
+              )}
+              <View style={styles.headerMetaChip}>
+                <Text style={styles.headerMetaChipText}>{completedSets}/{totalSets} sets</Text>
+              </View>
+            </View>
           </View>
-          <TouchableOpacity
-            onPress={() => setMenuVisible(true)}
-            disabled={isWorkoutCompleted}
-            style={[styles.addExerciseButton, isWorkoutCompleted && styles.addExerciseButtonDisabled]}
-          >
-            <MaterialIcons name="more-vert" size={24} color={isWorkoutCompleted ? "#666" : "#999"} />
-          </TouchableOpacity>
-        </View>
-      </View>
+        </Animated.View>
+      </Animated.View>
 
       {/* Exercise List */}
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        keyboardDismissMode="on-drag"
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: false }
+        )}
+        scrollEventThrottle={16}
+      >
         {exerciseTrackings.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyText}>No exercises in this workout</Text>
@@ -837,34 +914,45 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   header: {
-    padding: 20,
     borderBottomWidth: 1,
     borderBottomColor: '#333',
   },
-  headerContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  headerDetails: {
     alignItems: 'center',
   },
-  headerText: {
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    width: '100%',
+    paddingRight: 12,
+  },
+  mesocycleSubtitle: {
+    flex: 1,
+    fontSize: 17,
+    color: '#999',
+    marginRight: 8,
+    paddingLeft: 12,
+  },
+  mesocycleSubtitlePlaceholder: {
     flex: 1,
   },
-  workoutName: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 8,
+  headerChips: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexShrink: 0,
   },
-  progressText: {
-    fontSize: 16,
+  headerMetaChip: {
+    backgroundColor: '#2a2a2a',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  headerMetaChipText: {
+    fontSize: 13,
     color: '#999',
-  },
-  addExerciseButton: {
-    padding: 4,
-    marginLeft: 12,
-  },
-  addExerciseButtonDisabled: {
-    opacity: 0.5,
   },
   scrollView: {
     flex: 1,

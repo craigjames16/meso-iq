@@ -16,6 +16,7 @@ import { WorkoutCalendar } from '../../components/WorkoutCalendar';
 import { WeekViewCards } from '../../components/WeekViewCards';
 import { ConsistencyCard } from '../../components/data/ConsistencyCard';
 import { LastWorkoutVolumeCard } from '../../components/data/LastWorkoutVolumeCard';
+import { VolumeOverTimeCard } from '../../components/data/VolumeOverTimeCard';
 import { themeColors, spacing } from '../../theme/colors';
 import { useSchedule } from '../../context/ScheduleContext';
 import type { CompositeNavigationProp } from '@react-navigation/native';
@@ -524,6 +525,7 @@ export const TrackScreen: React.FC = () => {
           <ConsistencyCard mesocycleId={currentMesocycle?.id || null} />
           <LastWorkoutVolumeCard mesocycleId={currentMesocycle?.id || null} />
         </View>
+        <VolumeOverTimeCard />
         <WorkoutCalendar mesocycleId={currentMesocycle?.id || null} />
       </ScrollView>
     </View>
@@ -540,6 +542,7 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     padding: 8,
+    paddingBottom: 88,
   },
   cardsGrid: {
     flexDirection: 'row',

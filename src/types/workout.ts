@@ -93,11 +93,17 @@ export interface WorkoutInstance {
     id: number;
     planInstanceId: number;
     planDayId: number;
+    planDay: {
+      id: number;
+      dayNumber: number;
+      isRestDay?: boolean;
+    };
     planInstance: {
       id: number;
       planId: number;
       iterationNumber: number | null;
       status: string | null;
+      rir?: number | null;
       plan: {
         id: number;
         name: string;

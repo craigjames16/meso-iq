@@ -56,6 +56,15 @@ export const authService = {
     }
   },
 
+  async deleteAccount(): Promise<void> {
+    try {
+      await apiClient.delete(endpoints.USERS);
+      await storage.clearAll();
+    } catch (error: any) {
+      throw new Error(error.message || 'Failed to delete account');
+    }
+  },
+
   async signOut(): Promise<void> {
     try {
       // Call signout endpoint if available

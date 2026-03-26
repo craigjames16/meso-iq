@@ -5,17 +5,20 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Alert,
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   ImageBackground,
+  Linking,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuth } from '../../hooks/useAuth';
 import { AuthStackParamList } from '../../navigation/AuthNavigator';
+
+const PRIVACY_POLICY_URL = 'https://www.meso-iq.com/privacy-policy';
+const TERMS_OF_SERVICE_URL = 'https://www.meso-iq.com/terms-of-service';
 
 type SignUpScreenNavigationProp = NativeStackNavigationProp<AuthStackParamList, 'SignUp'>;
 
@@ -29,6 +32,13 @@ export const SignUpScreen: React.FC = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+
+  const openLegalUrl = (url: string) => {
+    Linking.openURL(url).catch(() => {
+      setError('Could not open link. Please try again.');
+    });
+  };
 
   const validateForm = (): boolean => {
     if (!email.trim()) {
@@ -41,6 +51,10 @@ export const SignUpScreen: React.FC = () => {
     }
     if (password !== confirmPassword) {
       setError('Passwords do not match');
+      return false;
+    }
+    if (!acceptedTerms) {
+      setError('Please accept the Privacy Policy and Terms of Service');
       return false;
     }
     return true;
@@ -155,10 +169,51 @@ export const SignUpScreen: React.FC = () => {
               </View>
             </View>
 
+            <View style={styles.termsRow}>
+              <TouchableOpacity
+                onPress={() => setAcceptedTerms(!acceptedTerms)}
+                disabled={isLoading}
+                activeOpacity={0.7}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: acceptedTerms }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <View
+                  style={[
+                    styles.checkbox,
+                    acceptedTerms && styles.checkboxChecked,
+                  ]}
+                >
+                  {acceptedTerms ? (
+                    <Text style={styles.checkboxMark}>✓</Text>
+                  ) : null}
+                </View>
+              </TouchableOpacity>
+              <Text style={styles.termsText}>
+                I agree to the{' '}
+                <Text
+                  style={styles.termsLink}
+                  onPress={() => openLegalUrl(PRIVACY_POLICY_URL)}
+                >
+                  Privacy Policy
+                </Text>
+                {' '}and{' '}
+                <Text
+                  style={styles.termsLink}
+                  onPress={() => openLegalUrl(TERMS_OF_SERVICE_URL)}
+                >
+                  Terms of Service
+                </Text>
+              </Text>
+            </View>
+
             <TouchableOpacity
-              style={[styles.button, isLoading && styles.buttonDisabled]}
+              style={[
+                styles.button,
+                (isLoading || !acceptedTerms) && styles.buttonDisabled,
+              ]}
               onPress={handleSignUp}
-              disabled={isLoading}
+              disabled={isLoading || !acceptedTerms}
             >
               {isLoading ? (
                 <ActivityIndicator color="#fff" />
@@ -267,6 +322,45 @@ const styles = StyleSheet.create({
   eyeButtonText: {
     color: '#999',
     fontSize: 14,
+  },
+  termsRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+    marginTop: 4,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 4,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.5)',
+    marginRight: 12,
+    marginTop: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(42, 42, 42, 0.6)',
+  },
+  checkboxChecked: {
+    borderColor: '#007AFF',
+    backgroundColor: '#007AFF',
+  },
+  checkboxMark: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+    lineHeight: 16,
+  },
+  termsText: {
+    flex: 1,
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.9)',
+    lineHeight: 20,
+  },
+  termsLink: {
+    color: '#007AFF',
+    fontWeight: '600',
+    textDecorationLine: 'underline',
   },
   button: {
     backgroundColor: '#007AFF',
