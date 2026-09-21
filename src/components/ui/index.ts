@@ -21,3 +21,5 @@ export { Divider } from './Divider';
 export { Stepper } from './Stepper';
 export { AvatarButton } from './Avatar';
 export * from './glyphs';
+export { PickerSheet } from './PickerSheet';
+export { Insight } from './Insight';

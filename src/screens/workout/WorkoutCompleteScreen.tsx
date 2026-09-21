@@ -35,7 +35,7 @@ import {
 } from '../../components/ui';
 import { planContext, sessionName } from '../../components/session/sessionText';
 import { colors, radius, space, type } from '../../theme';
-import { formatNumber, formatPercentDelta, formatSigned } from '../../utils/format';
+import { formatNumber, formatPercentDelta, formatSigned, formatWeight } from '../../utils/format';
 import { workoutDisplayName } from '../../utils/names';
 
 type Route = RouteProp<RootStackParamList, 'WorkoutComplete'>;
@@ -143,7 +143,7 @@ export const WorkoutCompleteScreen: React.FC = () => {
     if (pr.kind === 'e1rm') {
       return `Est. 1RM ${formatNumber(pr.value)} lb${pr.delta != null ? ` · ${formatSigned(pr.delta)} lb` : ''}`;
     }
-    return `Most reps at ${formatNumber(pr.weight ?? 0)} lb · ${pr.value}`;
+    return `Most reps at ${formatWeight(pr.weight ?? 0)} lb · ${pr.value}`;
   };
 
   const goToday = () => navigation.navigate('Main', { screen: 'Track' });
@@ -202,7 +202,7 @@ export const WorkoutCompleteScreen: React.FC = () => {
                   <ListRow
                     key={r.id}
                     title={r.name}
-                    meta={r.top ? `Top set ${r.top.weight} × ${r.top.reps}` : 'No working sets'}
+                    meta={r.top ? `Top set ${formatWeight(r.top.weight)} × ${r.top.reps}` : 'No working sets'}
                     right={histories == null ? <Skeleton height={14} width={40} rounded="field" /> : <DeltaText value={r.change} />}
                     divider={i > 0}
                   />

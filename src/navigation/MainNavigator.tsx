@@ -113,6 +113,7 @@ export const MainNavigator: React.FC = () => {
         component={DataScreen}
         options={{ 
           title: 'Data',
+          headerShown: false,
           tabBarIcon: ({ color, size }) => (
             <MaterialIcons name="bar-chart" size={size} color={color} />
           ),

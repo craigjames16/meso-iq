@@ -29,7 +29,7 @@ export type RootStackParamList = {
   PlanDetail: { planId: number };
   EditPlan: { planId: number };
   MesocycleDetail: { mesocycleId: number };
-  Heatmap: { mesocycleId: number | null };
+  Heatmap: { year: number };
   ExerciseDetail: { exerciseId: number };
   StyleGuide: undefined;
 };
@@ -112,17 +112,7 @@ export const AppNavigator: React.FC = () => {
               title: 'Mesocycle Details',
             }}
           />
-          <Stack.Screen 
-            name="Heatmap" 
-            component={HeatmapScreen}
-            options={{
-              headerShown: true,
-              headerStyle: { backgroundColor: colors.bg },
-              headerTintColor: colors.text.primary,
-              headerTitleStyle: { fontWeight: 'bold' },
-              title: 'Workout Heatmap',
-            }}
-          />
+<Stack.Screen name="Heatmap" component={HeatmapScreen} />
           <Stack.Screen 
             name="ExerciseDetail" 
             component={ExerciseDetailScreen}

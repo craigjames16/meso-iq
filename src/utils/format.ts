@@ -119,3 +119,10 @@ export function formatDaysAgo(days: number): string {
 export function pluralize(count: number, singular: string, plural = `${singular}s`): string {
   return `${formatNumber(count)} ${count === 1 ? singular : plural}`;
 }
+
+/** A set weight: whole numbers without decimals, fractional plates kept (57.5, 1,002.5). */
+export function formatWeight(weight: number): string {
+  if (!Number.isFinite(weight)) return '—';
+  const rounded = Math.round(weight * 100) / 100;
+  return formatNumber(rounded, Number.isInteger(rounded) ? 0 : rounded * 10 === Math.round(rounded * 10) ? 1 : 2);
+}

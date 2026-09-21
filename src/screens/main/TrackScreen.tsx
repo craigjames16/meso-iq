@@ -38,7 +38,7 @@ import { ThisWeek, type WeekCell } from '../../components/track/ThisWeek';
 import { OffPlanSheet } from '../../components/track/OffPlanSheet';
 import { SessionRow } from '../../components/session/SessionRow';
 import { colors, muscleLabel, radius, type } from '../../theme';
-import { calendarDaysBetween, formatDaysAgo, formatLongDay, formatNumber } from '../../utils/format';
+import { calendarDaysBetween, formatDaysAgo, formatLongDay, formatNumber, formatWeight } from '../../utils/format';
 import { workoutDisplayName } from '../../utils/names';
 
 type Nav = CompositeNavigationProp<
@@ -151,7 +151,7 @@ export const TrackScreen: React.FC = () => {
         if (first && firstSets.length > 0) {
           carryOver.push(
             { text: ' Opening set target: ' },
-            { text: `${first.name} ${firstSets.length} × ${firstSets[0].reps} @ ${firstSets[0].weight} lb`, strong: true },
+            { text: `${first.name} ${firstSets.length} × ${firstSets[0].reps} @ ${formatWeight(firstSets[0].weight)} lb`, strong: true },
             { text: '.' },
           );
         }

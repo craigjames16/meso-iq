@@ -99,3 +99,47 @@ export const mesoDetail = {
     },
   ],
 };
+
+/** Eight weekly Push sessions, oldest first, with Cable Flyes rising 2.5 lb a week. */
+export function pushHistory(weeks = 8) {
+  return Array.from({ length: weeks }, (_, i) => {
+    const age = (weeks - 1 - i) * 7;
+    const w = 40 + i * 2.5;
+    return {
+      ...pushSession,
+      id: 700 + i,
+      startedAt: daysAgo(age),
+      completedAt: daysAgo(age),
+      exerciseSets: [1, 2, 3].map((n) => ({
+        id: 7000 + i * 10 + n,
+        exerciseId: 10,
+        setNumber: n,
+        subSetNumber: null,
+        setType: 'REGULAR',
+        weight: w,
+        reps: 12,
+        exercise: { id: 10, name: 'Cable Flyes', category: 'CHEST' },
+      })),
+      planInstanceDays: [
+        {
+          ...pushSession.planInstanceDays[0],
+          planInstance: { ...pushSession.planInstanceDays[0].planInstance, iterationNumber: i < 4 ? 1 : 2 },
+        },
+      ],
+    };
+  });
+}
+
+export function cableFlyesDetail(weeks = 8) {
+  return {
+    id: 10,
+    name: 'Cable Flyes',
+    category: 'CHEST',
+    history: pushHistory(weeks).map((s) => ({
+      workoutInstanceId: s.id,
+      volume: 0,
+      completedAt: s.completedAt,
+      sets: s.exerciseSets.map((x) => ({ weight: x.weight, reps: x.reps, setNumber: x.setNumber, subSetNumber: null, setType: 'REGULAR' })),
+    })),
+  };
+}

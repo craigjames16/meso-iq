@@ -26,3 +26,21 @@ describe('search', () => {
     expect(normalizedDistance('abcd', 'abcx')).toBe(0.25);
   });
 });
+
+import { formatNumber, formatPercentDelta, formatWeight } from '../format';
+
+describe('format', () => {
+  it('keeps fractional plates in weights', () => {
+    expect(formatWeight(57.5)).toBe('57.5');
+    expect(formatWeight(225)).toBe('225');
+    expect(formatWeight(1002.5)).toBe('1,002.5');
+    expect(formatWeight(33.75)).toBe('33.75');
+  });
+
+  it('formats signed deltas with a flat band', () => {
+    expect(formatPercentDelta(0.031)).toBe('+3.1%');
+    expect(formatPercentDelta(-0.018)).toBe('−1.8%');
+    expect(formatPercentDelta(0.004)).toBe('0.0%');
+    expect(formatNumber(8214)).toBe('8,214');
+  });
+});
