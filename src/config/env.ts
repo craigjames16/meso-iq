@@ -22,6 +22,8 @@ export const API_ENDPOINTS = {
   },
   /** Current user (soft-delete account) */
   USERS: '/api/users',
+  /** Logged sets CSV (session or Bearer) */
+  EXPORT_SETS: '/api/export/sets',
   MESOCYCLES: {
     LIST: '/api/mesocycles',
     GET: (id: number) => `/api/mesocycles/${id}`,

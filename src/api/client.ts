@@ -156,6 +156,55 @@ class ApiClient {
 
     return this.handleResponse<T>(response);
   }
+
+  /**
+   * Authenticated GET that returns raw text (JSON or CSV file body), not parsed JSON.
+   */
+  async downloadGet(
+    endpoint: string
+  ): Promise<{ body: string; filename: string | null }> {
+    const token = await storage.getToken();
+    const headers: Record<string, string> = {
+      Accept: 'application/json, text/csv, */*',
+    };
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+
+    const response = await fetch(`${this.baseUrl}${endpoint}`, {
+      method: 'GET',
+      headers,
+    });
+
+    const text = await response.text();
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        await storage.clearAll();
+        throw new Error('Unauthorized - Please sign in again');
+      }
+      let message = response.statusText || 'Download failed';
+      const trimmed = text.trim();
+      if (trimmed.startsWith('{')) {
+        try {
+          const j = JSON.parse(trimmed) as { error?: string; message?: string };
+          message = j.error || j.message || message;
+        } catch {
+          // use message as-is
+        }
+      } else if (trimmed) {
+        message = trimmed.slice(0, 200);
+      }
+      throw new Error(message);
+    }
+
+    const cd = response.headers.get('content-disposition');
+    const quoted = cd?.match(/filename="([^"]+)"/);
+    const unquoted = cd?.match(/filename=([^;\s]+)/);
+    const filename = (quoted?.[1] ?? unquoted?.[1])?.trim() ?? null;
+
+    return { body: text, filename };
+  }
 }
 
 export const apiClient = new ApiClient(API_URL);

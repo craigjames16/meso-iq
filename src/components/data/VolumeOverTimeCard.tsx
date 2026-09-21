@@ -17,6 +17,7 @@ import { themeColors, borderRadius, spacing } from '../../theme/colors';
 import { SegmentedControl } from './SegmentedControl';
 import { useSchedule } from '../../context/ScheduleContext';
 import type { WorkoutInstance } from '../../types/workout';
+import { getVolumeForInstance } from '../../utils/workoutVolume';
 
 echarts.use([
   TooltipComponent,
@@ -34,28 +35,6 @@ const periodSegments = [
   { label: '90 Days', value: '90' },
   { label: '1 Year', value: '365' },
 ];
-
-function getVolumeForInstance(instance: WorkoutInstance): number {
-  if (instance.exerciseSets && instance.exerciseSets.length > 0) {
-    return instance.exerciseSets.reduce(
-      (total: number, set: { weight: number; reps: number }) =>
-        total + set.weight * set.reps,
-      0
-    );
-  }
-  if (instance.workoutExercises && instance.workoutExercises.length > 0) {
-    return (instance.workoutExercises as any[]).reduce(
-      (total: number, we: any) =>
-        total +
-        (we.sets || []).reduce(
-          (s: number, set: any) => s + (set.weight || 0) * (set.reps || 0),
-          0
-        ),
-      0
-    );
-  }
-  return 0;
-}
 
 export const VolumeOverTimeCard: React.FC = () => {
   const [period, setPeriod] = useState<PeriodValue>('30');

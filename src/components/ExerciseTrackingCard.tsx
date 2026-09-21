@@ -15,7 +15,7 @@ import type { RootStackParamList } from '../navigation/AppNavigator';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { ExerciseHistoryModal, HistoryInstance } from './ExerciseHistoryModal';
 import { BottomDrawer } from './BottomDrawer';
-import { exercisesService } from '../services/exercisesService';
+import type { ExerciseDetailData } from '../utils/workoutTrackingResolver';
 import { themeColors, spacing, borderRadius } from '../theme/colors';
 
 export interface ExerciseSet {
@@ -59,6 +59,8 @@ interface ExerciseTrackingCardProps {
   onConvertSetType?: (exerciseIndex: number, setIndex: number, setType: 'REGULAR' | 'DROP_SET' | 'MYO_REP') => void;
   onAddSubSet?: (exerciseIndex: number, parentSetIndex: number) => void;
   onShowHistory?: (exercise: ExerciseTracking) => void;
+  /** From workout context — history, last volume, last sets for placeholders (no per-card API fetch). */
+  exerciseDetail: ExerciseDetailData;
 }
 
 // Helper function to format set number
@@ -231,65 +233,24 @@ export const ExerciseTrackingCard: React.FC<ExerciseTrackingCardProps> = ({
   onConvertSetType,
   onAddSubSet,
   onShowHistory,
+  exerciseDetail,
 }) => {
-  console.log('ExerciseTrackingCard', exercise);
   const [exerciseMenuVisible, setExerciseMenuVisible] = useState(false);
   const [setMenuVisible, setSetMenuVisible] = useState(false);
   const [activeSetIndex, setActiveSetIndex] = useState<number | null>(null);
   const [historyModalVisible, setHistoryModalVisible] = useState(false);
-  const [exerciseDetail, setExerciseDetail] = useState<{
-    history: HistoryInstance[];
-    lastVolume: number | null;
-    lastSets: Array<{
-      setNumber: number;
-      reps: number;
-      weight: number;
-      subSetNumber?: number | null;
-      setType?: 'REGULAR' | 'DROP_SET' | 'MYO_REP';
-    }>;
-  } | null>(null);
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const data = await exercisesService.getExercise(exercise.exerciseId);
-        if (cancelled) return;
-        const rawHistory = data.history ?? [];
-        const history: HistoryInstance[] = rawHistory
-          .filter((h) => h.completedAt != null)
-          .map((h) => ({
-            workoutInstanceId: h.workoutInstanceId,
-            volume: h.volume,
-            completedAt: h.completedAt as string | Date,
-            sets: h.sets ?? [],
-          }));
-        const lastEntry = history.length > 0 ? history[history.length - 1] : null;
-        const lastSets = lastEntry?.sets ?? [];
-        const lastVolume = lastEntry?.volume ?? null;
-        setExerciseDetail({
-          history,
-          lastVolume: lastVolume != null ? lastVolume : null,
-          lastSets: Array.isArray(lastSets) ? lastSets : [],
-        });
-      } catch {
-        if (!cancelled) setExerciseDetail({ history: [], lastVolume: null, lastSets: [] });
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [exercise.exerciseId]);
 
   const handleExerciseNamePress = () => {
     navigation.navigate('ExerciseDetail', { exerciseId: exercise.exerciseId });
   };
 
-  const lastVolume = exerciseDetail?.lastVolume ?? null;
+  const lastVolume = exerciseDetail.lastVolume ?? null;
 
   /** Find last-workout set that matches this row (same setNumber and subSetNumber for correct placeholders). */
   const getLastSetForRow = (setNumber: number | undefined, subSetNumber: number | null | undefined) => {
     if (setNumber == null) return null;
-    const lastSets = exerciseDetail?.lastSets ?? [];
+    const lastSets = exerciseDetail.lastSets ?? [];
     return lastSets.find((s) => {
       if (s.setNumber !== setNumber) return false;
       const sSub = s.subSetNumber ?? null;
@@ -604,7 +565,7 @@ export const ExerciseTrackingCard: React.FC<ExerciseTrackingCardProps> = ({
         visible={historyModalVisible}
         onClose={() => setHistoryModalVisible(false)}
         exerciseName={exercise.exerciseName}
-        history={exerciseDetail?.history ?? exercise.history ?? []}
+        history={exerciseDetail.history ?? exercise.history ?? []}
       />
     </>
   );

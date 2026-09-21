@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useLayoutEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,15 +6,22 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
+  Share,
+  ActivityIndicator,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { useAuth } from '../../hooks/useAuth';
+import { themeColors, spacing, borderRadius } from '../../theme/colors';
+import { downloadSetsCsvExport } from '../../services/userDataExportService';
 
 export const AccountSettingsScreen: React.FC = () => {
+  const navigation = useNavigation();
   const { user, signOut, deleteAccount } = useAuth();
   const [dangerZoneOpen, setDangerZoneOpen] = useState(false);
+  const [exportingData, setExportingData] = useState(false);
 
-  const handleSignOut = () => {
+  const handleSignOut = useCallback(() => {
     Alert.alert(
       'Sign Out',
       'Are you sure you want to sign out?',
@@ -33,7 +40,23 @@ export const AccountSettingsScreen: React.FC = () => {
         },
       ]
     );
-  };
+  }, [signOut]);
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <TouchableOpacity
+          onPress={handleSignOut}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 4 }}
+          accessibilityRole="button"
+          accessibilityLabel="Sign out"
+          style={styles.headerSignOut}
+        >
+          <Text style={styles.headerSignOutText}>Sign out</Text>
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation, handleSignOut]);
 
   const handleDeleteAccount = () => {
     Alert.alert(
@@ -69,6 +92,26 @@ export const AccountSettingsScreen: React.FC = () => {
     );
   };
 
+  const handleDownloadMyData = async () => {
+    setExportingData(true);
+    try {
+      const { body, filename } = await downloadSetsCsvExport();
+      const title =
+        filename?.replace(/\.csv$/i, '') || 'MesoIQ workout data export';
+      await Share.share({
+        message: body,
+        title,
+      });
+    } catch (err) {
+      Alert.alert(
+        'Could not export data',
+        err instanceof Error ? err.message : 'Something went wrong.'
+      );
+    } finally {
+      setExportingData(false);
+    }
+  };
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.section}>
@@ -79,46 +122,92 @@ export const AccountSettingsScreen: React.FC = () => {
         </View>
       </View>
 
-      <View style={styles.section}>
-        <TouchableOpacity
-          style={styles.signOutButton}
-          onPress={handleSignOut}
-        >
-          <MaterialIcons name="logout" size={20} color="#ff4444" />
-          <Text style={styles.signOutText}>Sign Out</Text>
-        </TouchableOpacity>
+      <View style={[styles.section, styles.dataSection]}>
+        <Text style={styles.sectionTitle}>Data</Text>
+        <Text style={styles.dataDescription}>
+          Download your training history as a spreadsheet, or permanently delete
+          your account. Deleted accounts keep data for 90 days per policy, then it
+          is removed.
+        </Text>
 
-        <View style={styles.dangerZone}>
+        <View style={styles.dataPanel}>
           <TouchableOpacity
-            style={styles.dangerZoneHeader}
+            style={styles.dataRow}
+            onPress={handleDownloadMyData}
+            disabled={exportingData}
+            accessibilityRole="button"
+            accessibilityLabel="Download my data"
+          >
+            {exportingData ? (
+              <ActivityIndicator color={themeColors.primary.light} size="small" />
+            ) : (
+              <MaterialIcons
+                name="download"
+                size={22}
+                color={themeColors.primary.light}
+              />
+            )}
+            <Text style={styles.dataRowLabel}>Download my data</Text>
+            <MaterialIcons
+              name="chevron-right"
+              size={22}
+              color={themeColors.text.muted}
+            />
+          </TouchableOpacity>
+
+          <View style={styles.dataRowSeparator} />
+
+          <TouchableOpacity
+            style={styles.dataRow}
             onPress={() => setDangerZoneOpen((open) => !open)}
             accessibilityRole="button"
             accessibilityState={{ expanded: dangerZoneOpen }}
-            accessibilityLabel="Danger zone"
+            accessibilityLabel="Delete account options"
           >
-            <MaterialIcons name="warning-amber" size={22} color="#c9a227" />
-            <Text style={styles.dangerZoneTitle}>Danger Zone</Text>
             <MaterialIcons
-              name={dangerZoneOpen ? 'expand-less' : 'expand-more'}
-              size={28}
-              color="#888"
-              style={styles.dangerZoneChevron}
+              name="delete-outline"
+              size={22}
+              color={themeColors.accent.error}
+            />
+            <Text style={styles.dataRowLabelDanger}>Delete account</Text>
+            <MaterialIcons
+              name="keyboard-arrow-down"
+              size={22}
+              color={themeColors.text.muted}
+              style={dangerZoneOpen ? styles.dataRowArrowOpen : undefined}
             />
           </TouchableOpacity>
+
           {dangerZoneOpen ? (
-            <View style={styles.dangerZoneBody}>
-              <Text style={styles.dangerZoneHint}>
-                Permanently delete your account. This cannot be undone from the
-                app.
-              </Text>
-              <TouchableOpacity
-                style={styles.deleteAccountButton}
-                onPress={handleDeleteAccount}
-              >
-                <MaterialIcons name="delete-forever" size={20} color="#ff6666" />
-                <Text style={styles.deleteAccountText}>Delete account</Text>
-              </TouchableOpacity>
-            </View>
+            <>
+              <View style={styles.dataRowSeparator} />
+              <View style={styles.dataExpanded}>
+                <Text style={styles.dataExpandedHint}>
+                  This disables sign-in and schedules your data for deletion. You
+                  will confirm in the next step.
+                </Text>
+                <TouchableOpacity
+                  style={styles.dataRow}
+                  onPress={handleDeleteAccount}
+                  accessibilityRole="button"
+                  accessibilityLabel="Confirm delete account"
+                >
+                  <MaterialIcons
+                    name="delete-forever"
+                    size={22}
+                    color={themeColors.accent.error}
+                  />
+                  <Text style={styles.dataRowLabelDanger}>
+                    Permanently delete my account
+                  </Text>
+                  <MaterialIcons
+                    name="chevron-right"
+                    size={22}
+                    color={themeColors.text.muted}
+                  />
+                </TouchableOpacity>
+              </View>
+            </>
           ) : null}
         </View>
       </View>
@@ -136,6 +225,10 @@ const styles = StyleSheet.create({
   },
   section: {
     marginBottom: 32,
+  },
+  dataSection: {
+    alignSelf: 'stretch',
+    width: '100%',
   },
   sectionTitle: {
     fontSize: 18,
@@ -160,73 +253,63 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '500',
   },
-  deleteAccountButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#2a2a2a',
-    borderRadius: 8,
-    padding: 16,
-    gap: 8,
-    borderWidth: 1,
-    borderColor: '#553333',
-    marginBottom: 12,
+  dataDescription: {
+    fontSize: 14,
+    color: themeColors.text.muted,
+    lineHeight: 20,
+    marginBottom: spacing.md,
   },
-  deleteAccountText: {
-    color: '#ff6666',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  dangerZone: {
-    marginTop: 16,
-    borderRadius: 8,
+  dataPanel: {
+    alignSelf: 'stretch',
     borderWidth: 1,
-    borderColor: '#4a3d1a',
-    backgroundColor: '#221f18',
+    borderColor: themeColors.border.default,
+    borderRadius: borderRadius.sm,
     overflow: 'hidden',
   },
-  dangerZoneHeader: {
+  dataRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    gap: 10,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    gap: spacing.sm,
   },
-  dangerZoneTitle: {
+  dataRowSeparator: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: themeColors.border.default,
+  },
+  dataRowLabel: {
     flex: 1,
     fontSize: 16,
     fontWeight: '600',
-    color: '#d4b84a',
+    color: themeColors.primary.light,
   },
-  dangerZoneChevron: {
-    marginLeft: 'auto',
+  dataRowLabelDanger: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '600',
+    color: themeColors.accent.error,
   },
-  dangerZoneBody: {
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-    paddingTop: 4,
-    borderTopWidth: 1,
-    borderTopColor: '#3d3520',
+  dataRowArrowOpen: {
+    transform: [{ rotate: '180deg' }],
   },
-  dangerZoneHint: {
+  dataExpanded: {
+    paddingBottom: spacing.sm,
+  },
+  dataExpandedHint: {
     fontSize: 13,
-    color: '#888',
+    color: themeColors.text.muted,
     lineHeight: 18,
-    marginBottom: 12,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.sm,
   },
-  signOutButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#2a2a2a',
-    borderRadius: 8,
-    padding: 16,
-    gap: 8,
-    borderWidth: 1,
-    borderColor: '#ff4444',
+  headerSignOut: {
+    marginRight: 4,
+    paddingVertical: 4,
+    paddingLeft: 8,
   },
-  signOutText: {
-    color: '#ff4444',
+  headerSignOutText: {
+    color: themeColors.accent.error,
     fontSize: 16,
     fontWeight: '600',
   },

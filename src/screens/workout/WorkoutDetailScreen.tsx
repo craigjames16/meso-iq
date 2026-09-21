@@ -14,11 +14,12 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { workoutService } from '../../services/workoutService';
 import type { RootStackParamList } from '../../navigation/AppNavigator';
-import { ExerciseTrackingCard, type ExerciseTracking, type ExerciseSet } from '../../components/ExerciseTrackingCard';
-import { DropdownMenu, type DropdownMenuItem } from '../../components/DropdownMenu';
+import { ExerciseTrackingCard, type ExerciseTracking } from '../../components/ExerciseTrackingCard';
+import { DropdownMenu } from '../../components/DropdownMenu';
 import { ConfirmationModal } from '../../components/ConfirmationModal';
 import { AddExerciseModal } from '../../components/plan/AddExerciseModal';
 import { exercisesService } from '../../services/exercisesService';
+import type { ExerciseDetailData } from '../../utils/workoutTrackingResolver';
 import { ExerciseListItem } from '../../types/plan';
 import { themeColors, spacing, borderRadius } from '../../theme/colors';
 import { useSchedule } from '../../context/ScheduleContext';
@@ -32,83 +33,11 @@ type WorkoutDetailScreenNavigationProp = NativeStackNavigationProp<RootStackPara
 const SCROLL_THRESHOLD = 60;
 const MESOCYCLE_NAME_MAX_LENGTH = 18;
 
-/** Build trackings from workout instance (nested workoutExercises[].sets). No history/lastSet. */
-function buildTrackingsFromWorkoutInstance(workoutInstance: any): ExerciseTracking[] {
-  const workoutExercises = workoutInstance.workoutExercises ?? [];
-  const completed = !!workoutInstance.completedAt;
-
-  const trackings: ExerciseTracking[] = workoutExercises.map((workoutExercise: any) => {
-    const exerciseId = workoutExercise.exercise?.id ?? workoutExercise.exerciseId;
-    const exerciseName = workoutExercise.exercise?.name ?? '';
-    const order = workoutExercise.order ?? 0;
-    const nestedSets = workoutExercise.sets ?? [];
-
-    let sets: ExerciseSet[];
-
-    if (completed) {
-      sets = nestedSets.map((set: any) => ({
-        id: set.id,
-        reps: set.reps,
-        weight: set.weight,
-        setNumber: set.setNumber,
-        subSetNumber: set.subSetNumber ?? null,
-        setType: set.setType || 'REGULAR',
-        completed: true,
-      }));
-    } else {
-      if (nestedSets.length === 0) {
-        // No completed sets: leave empty; hydrate from last workout below
-        sets = [];
-      } else {
-        sets = nestedSets.map((set: any) => ({
-          id: set.id,
-          reps: set.reps,
-          weight: set.weight,
-          setNumber: set.setNumber,
-          subSetNumber: set.subSetNumber ?? null,
-          setType: set.setType || 'REGULAR',
-          completed: true,
-        }));
-      }
-    }
-
-    return {
-      exerciseId,
-      exerciseName,
-      order,
-      sets,
-    };
-  });
-
-  return trackings.sort((a, b) => a.order - b.order);
-}
-
-/** Build empty ExerciseSet[] from last workout's set structure (same count and types), with lastSet for placeholders. */
-function buildSetsFromLastWorkout(
-  lastSets: Array<{
-    weight: number;
-    reps: number;
-    setNumber: number;
-    subSetNumber?: number | null;
-    setType?: 'REGULAR' | 'DROP_SET' | 'MYO_REP';
-  }>
-): ExerciseSet[] {
-  if (!lastSets || lastSets.length === 0) {
-    return [
-      { reps: 0, weight: 0, setNumber: 1, subSetNumber: null, setType: 'REGULAR', completed: false },
-      { reps: 0, weight: 0, setNumber: 2, subSetNumber: null, setType: 'REGULAR', completed: false },
-    ];
-  }
-  return lastSets.map((s) => ({
-    reps: 0,
-    weight: 0,
-    setNumber: s.setNumber,
-    subSetNumber: s.subSetNumber ?? null,
-    setType: s.setType || 'REGULAR',
-    completed: false,
-    lastSet: { reps: s.reps, weight: s.weight, setNumber: s.setNumber },
-  }));
-}
+const EMPTY_EXERCISE_DETAIL: ExerciseDetailData = {
+  history: [],
+  lastVolume: null,
+  lastSets: [],
+};
 
 export const WorkoutDetailScreen: React.FC = () => {
   const route = useRoute<WorkoutDetailScreenRouteProp>();
@@ -119,11 +48,16 @@ export const WorkoutDetailScreen: React.FC = () => {
     workoutInstance,
     loading,
     error,
-    fetchWorkoutInstance,
-    refreshWorkoutInstance,
+    loadWorkoutData,
+    trackingsMap,
+    exerciseDetailsMap,
+    trackingsLoading,
+    updateExerciseTrackings,
+    clearWorkoutTrackings,
+    syncWorkoutInstance,
   } = useWorkoutInstance();
 
-  const [exerciseTrackings, setExerciseTrackings] = useState<ExerciseTracking[]>([]);
+  const exerciseTrackings = trackingsMap[workoutInstanceId] ?? [];
   const [completing, setCompleting] = useState(false);
   const [addExerciseModalVisible, setAddExerciseModalVisible] = useState(false);
   const [menuVisible, setMenuVisible] = useState(false);
@@ -133,14 +67,8 @@ export const WorkoutDetailScreen: React.FC = () => {
   const scrollY = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    fetchWorkoutInstance(workoutInstanceId);
-  }, [workoutInstanceId, fetchWorkoutInstance]);
-
-  useEffect(() => {
-    if (workoutInstance?.id === workoutInstanceId) {
-      setExerciseTrackings(buildTrackingsFromWorkoutInstance(workoutInstance));
-    }
-  }, [workoutInstance, workoutInstanceId]);
+    loadWorkoutData(workoutInstanceId);
+  }, [workoutInstanceId, loadWorkoutData]);
 
   // Set nav header title (Week X - Day Y) and menu button
   useEffect(() => {
@@ -172,53 +100,6 @@ export const WorkoutDetailScreen: React.FC = () => {
       ),
     });
   }, [workoutInstance, workoutInstanceId, navigation]);
-
-  // When an exercise has no completed sets, hydrate from last workout (same count and types)
-  useEffect(() => {
-    if (!workoutInstance || workoutInstance.id !== workoutInstanceId || workoutInstance.completedAt) return;
-    const withEmptySets = exerciseTrackings
-      .map((t, index) => ({ tracking: t, index }))
-      .filter(({ tracking }) => tracking.sets.length === 0);
-    if (withEmptySets.length === 0) return;
-
-    let cancelled = false;
-    const hydrate = async () => {
-      const results = await Promise.all(
-        withEmptySets.map(async ({ tracking, index }) => {
-          try {
-            const data = await exercisesService.getExercise(tracking.exerciseId);
-            const rawHistory = data.history ?? [];
-            const completedHistory = rawHistory.filter((h) => h.completedAt != null);
-            const lastEntry = completedHistory.length > 0 ? completedHistory[completedHistory.length - 1] : null;
-            const lastSets = lastEntry?.sets ?? [];
-            return { index, sets: buildSetsFromLastWorkout(lastSets) };
-          } catch {
-            return {
-              index,
-              sets: [
-                { reps: 0, weight: 0, setNumber: 1, subSetNumber: null, setType: 'REGULAR', completed: false },
-                { reps: 0, weight: 0, setNumber: 2, subSetNumber: null, setType: 'REGULAR', completed: false },
-              ] as ExerciseSet[],
-            };
-          }
-        })
-      );
-      if (cancelled) return;
-      setExerciseTrackings((prev) => {
-        const next = [...prev];
-        let changed = false;
-        for (const { index, sets } of results) {
-          if (next[index].sets.length === 0) {
-            next[index] = { ...next[index], sets };
-            changed = true;
-          }
-        }
-        return changed ? next : prev;
-      });
-    };
-    hydrate();
-    return () => { cancelled = true; };
-  }, [workoutInstance, workoutInstanceId, exerciseTrackings]);
 
   const fetchExercisesForModal = useCallback(async () => {
     try {
@@ -257,7 +138,7 @@ export const WorkoutDetailScreen: React.FC = () => {
     field: 'reps' | 'weight',
     value: number
   ) => {
-    setExerciseTrackings((prev) => {
+    updateExerciseTrackings(workoutInstanceId, (prev) => {
       const updated = [...prev];
       updated[exerciseIndex] = {
         ...updated[exerciseIndex],
@@ -280,7 +161,7 @@ export const WorkoutDetailScreen: React.FC = () => {
 
     if (!completed && set.id) {
       // Delete set - optimistic update
-      setExerciseTrackings((prev: ExerciseTracking[]) => {
+      updateExerciseTrackings(workoutInstanceId, (prev: ExerciseTracking[]) => {
         const updated = [...prev];
         updated[exerciseIndex].sets[setIndex] = {
           ...updated[exerciseIndex].sets[setIndex],
@@ -296,7 +177,7 @@ export const WorkoutDetailScreen: React.FC = () => {
       } catch (err) {
         console.error('Error in handleSetCompletion:', err);
         // Revert on error
-        setExerciseTrackings((prev: ExerciseTracking[]) => {
+        updateExerciseTrackings(workoutInstanceId, (prev: ExerciseTracking[]) => {
           const updated = [...prev];
           updated[exerciseIndex].sets[setIndex] = {
             ...updated[exerciseIndex].sets[setIndex],
@@ -314,7 +195,7 @@ export const WorkoutDetailScreen: React.FC = () => {
       const repsToUse = set.reps || (recommendedReps ?? set.lastSet?.reps ?? 0);
 
       // Optimistically mark as completed and loading
-      setExerciseTrackings((prev) => {
+      updateExerciseTrackings(workoutInstanceId, (prev) => {
         const updated = [...prev];
         updated[exerciseIndex].sets[setIndex] = {
           ...updated[exerciseIndex].sets[setIndex],
@@ -340,7 +221,7 @@ export const WorkoutDetailScreen: React.FC = () => {
 
         const newSetId = response[0]?.id;
         // Update with actual ID and remove loading
-        setExerciseTrackings((prev) => {
+        updateExerciseTrackings(workoutInstanceId, (prev) => {
           const updated = [...prev];
           updated[exerciseIndex].sets[setIndex] = {
             ...updated[exerciseIndex].sets[setIndex],
@@ -353,7 +234,7 @@ export const WorkoutDetailScreen: React.FC = () => {
       } catch (err) {
         console.error('Error in handleSetCompletion:', err);
         // Revert on error
-        setExerciseTrackings((prev) => {
+        updateExerciseTrackings(workoutInstanceId, (prev) => {
           const updated = [...prev];
           updated[exerciseIndex].sets[setIndex] = {
             ...updated[exerciseIndex].sets[setIndex],
@@ -373,15 +254,13 @@ export const WorkoutDetailScreen: React.FC = () => {
       setCompleting(true);
       setEndWorkoutConfirmVisible(false);
       await workoutService.completeWorkout(workoutInstanceId);
-      await refreshWorkoutInstance();
+      clearWorkoutTrackings(workoutInstanceId);
       try {
         await refreshSchedule();
       } catch (scheduleError) {
         console.error('Error refreshing schedule:', scheduleError);
       }
-      Alert.alert('Success', 'Workout completed!', [
-        { text: 'OK', onPress: () => navigation.goBack() },
-      ]);
+      navigation.replace('WorkoutComplete', { workoutInstanceId });
     } catch (err) {
       console.error('Error completing workout:', err);
       Alert.alert('Error', err instanceof Error ? err.message : 'Failed to complete workout');
@@ -391,7 +270,7 @@ export const WorkoutDetailScreen: React.FC = () => {
   };
 
   const handleAddSet = (exerciseIndex: number) => {
-    setExerciseTrackings((prev) => {
+    updateExerciseTrackings(workoutInstanceId, (prev) => {
       const updated = [...prev];
       const exercise = updated[exerciseIndex];
       const mainSets = exercise.sets.filter(s => s.subSetNumber === null || s.subSetNumber === undefined);
@@ -419,9 +298,8 @@ export const WorkoutDetailScreen: React.FC = () => {
   const handleRemoveExercise = async (exerciseIndex: number) => {
     const exercise = exerciseTrackings[exerciseIndex];
     try {
-      await workoutService.removeExercise(workoutInstanceId, exercise.exerciseId);
-      const updated = await refreshWorkoutInstance();
-      if (updated) setExerciseTrackings(buildTrackingsFromWorkoutInstance(updated));
+      const updatedInstance = await workoutService.removeExercise(workoutInstanceId, exercise.exerciseId);
+      await syncWorkoutInstance(workoutInstanceId, updatedInstance);
     } catch (err) {
       console.error('Error removing exercise:', err);
       Alert.alert('Error', err instanceof Error ? err.message : 'Failed to remove exercise');
@@ -432,8 +310,8 @@ export const WorkoutDetailScreen: React.FC = () => {
     try {
       const exercise = exerciseTrackings[exerciseIndex];
       await workoutService.reorderExercise(workoutInstanceId, exercise.exerciseId, direction);
-      const updated = await refreshWorkoutInstance();
-      if (updated) setExerciseTrackings(buildTrackingsFromWorkoutInstance(updated));
+      const updatedInstance = await workoutService.getWorkoutInstance(workoutInstanceId);
+      await syncWorkoutInstance(workoutInstanceId, updatedInstance);
     } catch (err) {
       console.error('Error reordering exercise:', err);
       Alert.alert('Error', err instanceof Error ? err.message : 'Failed to reorder exercise');
@@ -456,7 +334,7 @@ export const WorkoutDetailScreen: React.FC = () => {
     }
 
     // Remove set from state
-    setExerciseTrackings((prev) => {
+    updateExerciseTrackings(workoutInstanceId, (prev) => {
       const updated = [...prev];
       updated[exerciseIndex] = {
         ...updated[exerciseIndex],
@@ -476,7 +354,7 @@ export const WorkoutDetailScreen: React.FC = () => {
 
     // For incomplete sets, update local state and add blank sub-set if needed
     if (!set.id) {
-      setExerciseTrackings((prev) => {
+      updateExerciseTrackings(workoutInstanceId, (prev) => {
         const updated = [...prev];
         const currentSet = updated[exerciseIndex].sets[setIndex];
         
@@ -540,7 +418,7 @@ export const WorkoutDetailScreen: React.FC = () => {
       await workoutService.convertSetType(workoutInstanceId, set.id, setType);
       
       // Update local state
-      setExerciseTrackings((prev) => {
+      updateExerciseTrackings(workoutInstanceId, (prev) => {
         const updated = [...prev];
         updated[exerciseIndex].sets[setIndex] = {
           ...updated[exerciseIndex].sets[setIndex],
@@ -597,7 +475,7 @@ export const WorkoutDetailScreen: React.FC = () => {
     }
 
     // Add blank sub-set to state (not completed)
-    setExerciseTrackings((prev) => {
+    updateExerciseTrackings(workoutInstanceId, (prev) => {
       const updated = [...prev];
       updated[exerciseIndex] = {
         ...updated[exerciseIndex],
@@ -621,9 +499,8 @@ export const WorkoutDetailScreen: React.FC = () => {
   const handleSelectExercises = async (exercises: ExerciseListItem[]) => {
     try {
       const exerciseIds = exercises.map((ex) => ex.id);
-      await workoutService.addExercise(workoutInstanceId, exerciseIds);
-      const updated = await refreshWorkoutInstance();
-      if (updated) setExerciseTrackings(buildTrackingsFromWorkoutInstance(updated));
+      const updatedInstance = await workoutService.addExercise(workoutInstanceId, exerciseIds);
+      await syncWorkoutInstance(workoutInstanceId, updatedInstance);
       setAddExerciseModalVisible(false);
     } catch (err: any) {
       console.error('Error adding exercises:', err);
@@ -684,7 +561,7 @@ export const WorkoutDetailScreen: React.FC = () => {
   };
 
 
-  if (loading) {
+  if (loading || trackingsLoading) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#fff" />
@@ -803,6 +680,9 @@ export const WorkoutDetailScreen: React.FC = () => {
               isWorkoutCompleted={isWorkoutCompleted}
               totalExercises={exerciseTrackings.length}
               workoutInstance={workoutInstance}
+              exerciseDetail={
+                exerciseDetailsMap[exercise.exerciseId] ?? EMPTY_EXERCISE_DETAIL
+              }
               onUpdateSet={handleUpdateSet}
               onSetCompletion={handleSetCompletion}
               onAddSet={handleAddSet}
