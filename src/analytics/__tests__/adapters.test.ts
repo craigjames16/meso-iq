@@ -35,6 +35,26 @@ describe('adapters', () => {
     expect(sessions[0].sets[1]).toMatchObject({ subSetNumber: 1, setType: 'DROP_SET' });
   });
 
+  it('reads sets nested under workoutExercises', () => {
+    const base = instance(8, '2026-09-03T10:00:00Z', true);
+    const nested = {
+      ...base,
+      exerciseSets: undefined,
+      workoutExercises: [
+        {
+          id: 1,
+          exerciseId: 3,
+          order: 0,
+          exercise: { id: 3, name: 'Bench', category: 'CHEST' },
+          sets: [{ weight: 100, reps: 8, setNumber: 1, subSetNumber: null, setType: 'REGULAR' }],
+        },
+      ],
+    } as unknown as WorkoutInstance;
+    const [s] = sessionsFromHistory([nested]);
+    expect(s.sets).toEqual([{ exerciseId: 3, weight: 100, reps: 8, setNumber: 1, subSetNumber: null, setType: 'REGULAR' }]);
+    expect(s.exerciseNames?.[3]).toBe('Bench');
+  });
+
   it('builds cycle progress from planned sessions of one mesocycle', () => {
     const sessions = sessionsFromHistory([instance(1, '2026-09-01T10:00:00Z', true), instance(2, '2026-09-02T10:00:00Z', false)]);
     expect(cycleProgressFromSessions(sessions, 9).sessions).toHaveLength(1);

@@ -41,6 +41,7 @@ import {
 import { colors, radius, space, type } from '../../theme';
 import { invalidateExerciseHistory } from '../../hooks/exerciseSessions';
 import { invalidateMesocycles } from '../../hooks/mesocycleData';
+import { workoutDisplayName } from '../../utils/names';
 
 type WorkoutDetailRoute = RouteProp<RootStackParamList, 'WorkoutDetail'>;
 type WorkoutDetailNavigation = NativeStackNavigationProp<RootStackParamList, 'WorkoutDetail'>;
@@ -367,7 +368,11 @@ export const WorkoutDetailScreen: React.FC = () => {
   const pid = workoutInstance?.planInstanceDays?.[0];
   const planInstance = pid?.planInstance;
   const hasPlan = pid?.planDay != null && planInstance != null;
-  const title = workoutInstance?.workout?.name ?? 'Workout';
+  const title = workoutDisplayName(
+    workoutInstance?.workout?.name,
+    (workoutInstance?.workoutExercises ?? []).map((we: any) => we.exercise?.category),
+    pid?.planDay?.dayNumber,
+  );
   const meta = hasPlan
     ? [planInstance?.mesocycle?.name, planInstance?.iterationNumber != null && `Week ${planInstance.iterationNumber}`, pid?.planDay?.dayNumber != null && `Day ${pid.planDay.dayNumber}`]
         .filter(Boolean)

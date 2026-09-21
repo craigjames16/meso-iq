@@ -10,6 +10,7 @@ import { AuthNavigator } from './AuthNavigator';
 import { MainNavigator, type MainTabParamList } from './MainNavigator';
 import { WorkoutDetailScreen } from '../screens/workout/WorkoutDetailScreen';
 import { WorkoutCompleteScreen } from '../screens/workout/WorkoutCompleteScreen';
+import { PastSessionScreen } from '../screens/workout/PastSessionScreen';
 import { AccountSettingsScreen } from '../screens/main/AccountSettingsScreen';
 import { PlanDetailScreen } from '../screens/plan/PlanDetailScreen';
 import { EditPlanScreen } from '../screens/plan/EditPlanScreen';
@@ -23,6 +24,7 @@ export type RootStackParamList = {
   Main: NavigatorScreenParams<MainTabParamList>;
   WorkoutDetail: { workoutInstanceId: number };
   WorkoutComplete: { workoutInstanceId: number };
+  PastSession: { workoutInstanceId: number };
   AccountSettings: undefined;
   PlanDetail: { planId: number };
   EditPlan: { planId: number };
@@ -65,6 +67,7 @@ export const AppNavigator: React.FC = () => {
               gestureEnabled: false,
             }}
           />
+          <Stack.Screen name="PastSession" component={PastSessionScreen} />
           <Stack.Screen 
             name="AccountSettings" 
             component={AccountSettingsScreen}

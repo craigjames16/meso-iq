@@ -19,9 +19,11 @@ import { GlassTabBar } from '../components/GlassTabBar';
 import { themeColors, spacing } from '../theme/colors';
 import { colors } from '../theme';
 
+export type DataSubTab = 'cycle' | 'progress' | 'history';
+
 export type MainTabParamList = {
   Track: undefined;
-  Data: undefined;
+  Data: { tab?: DataSubTab } | undefined;
   Plan: undefined;
 };
 
@@ -100,6 +102,7 @@ export const MainNavigator: React.FC = () => {
         component={TrackScreen}
         options={{ 
           title: 'Track',
+          headerShown: false,
           tabBarIcon: ({ color, size }) => (
             <MaterialIcons name="fitness-center" size={size} color={color} />
           ),

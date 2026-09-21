@@ -141,14 +141,15 @@ export function useCycleStats(mesocycleId: number | null): HookResult<CycleStats
   useEffect(
     () =>
       subscribeMesocycles(() => {
-        if (mesocycleId != null) {
-          const cached = cachedMesocycle(mesocycleId);
-          if (cached) setDetail(cached);
-        }
+        if (mesocycleId == null) return;
+        const cached = cachedMesocycle(mesocycleId);
         const list = cachedMesocycles();
+        if (cached) setDetail(cached);
         if (list) setMesocycles(list);
+        // Invalidated after a write: fetch again in the background.
+        if (!cached || !list) load(false);
       }),
-    [mesocycleId],
+    [mesocycleId, load],
   );
 
   const { sessions: allSessions, muscleOf } = history.data;

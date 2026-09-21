@@ -2,6 +2,7 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { colors, radius, tabularNums, type } from '../../theme';
 import { DeltaText } from './DeltaText';
+import { NOT_ENOUGH_COPY } from './States';
 
 interface StatTileProps {
   label: string;
@@ -9,39 +10,59 @@ interface StatTileProps {
   delta?: number | null;
   deltaSuffix?: string;
   unit?: string;
+  /** A third line, for example a record's date. */
   meta?: string;
-  /** Shown in place of the value when the metric needs more history. */
+  valueColor?: string;
+  /** Label above the value, as on the records grid. Defaults to below. */
+  labelFirst?: boolean;
+  /** Shows "Not enough sessions yet" in place of the value. */
   empty?: boolean;
+  emptyLabel?: string;
 }
 
-export const StatTile: React.FC<StatTileProps> = ({ label, value, delta, deltaSuffix, unit, meta, empty }) => (
-  <View style={styles.tile}>
+export const StatTile: React.FC<StatTileProps> = ({
+  label,
+  value,
+  delta,
+  deltaSuffix,
+  unit,
+  meta,
+  valueColor,
+  labelFirst,
+  empty,
+  emptyLabel = NOT_ENOUGH_COPY,
+}) => {
+  const labelNode = (
     <Text style={styles.label} numberOfLines={1}>
       {label}
     </Text>
-    {empty ? (
-      <Text style={styles.empty}>Not enough sessions yet</Text>
-    ) : (
-      <View style={styles.valueRow}>
-        <Text style={styles.value} numberOfLines={1} adjustsFontSizeToFit>
-          {value}
+  );
+  return (
+    <View style={styles.tile} accessible accessibilityLabel={`${label}: ${empty ? emptyLabel : `${value}${unit ? ` ${unit}` : ''}`}`}>
+      {labelFirst ? labelNode : null}
+      {empty ? (
+        <Text style={styles.empty}>{emptyLabel}</Text>
+      ) : (
+        <View style={styles.valueRow}>
+          <Text style={[styles.value, valueColor ? { color: valueColor } : null]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+            {value}
+          </Text>
+          {unit ? <Text style={styles.unit}>{unit}</Text> : null}
+        </View>
+      )}
+      {!labelFirst ? labelNode : null}
+      {delta != null && !empty ? <DeltaText value={delta} suffix={deltaSuffix} /> : null}
+      {meta ? (
+        <Text style={styles.meta} numberOfLines={1}>
+          {meta}
         </Text>
-        {unit ? <Text style={styles.unit}>{unit}</Text> : null}
-      </View>
-    )}
-    {delta != null && !empty ? <DeltaText value={delta} suffix={deltaSuffix} /> : null}
-    {meta ? (
-      <Text style={styles.meta} numberOfLines={1}>
-        {meta}
-      </Text>
-    ) : null}
-  </View>
-);
+      ) : null}
+    </View>
+  );
+};
 
-/** Two or more tiles in a row. */
-export const StatRow: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <View style={styles.row}>{children}</View>
-);
+/** Tiles in a row that share the width. */
+export const StatRow: React.FC<{ children: React.ReactNode }> = ({ children }) => <View style={styles.row}>{children}</View>;
 
 const styles = StyleSheet.create({
   row: {
@@ -50,14 +71,17 @@ const styles = StyleSheet.create({
   },
   tile: {
     flex: 1,
-    backgroundColor: colors.surface.inset,
+    backgroundColor: colors.surface.card,
+    borderColor: colors.border.card,
+    borderWidth: 1,
     borderRadius: radius.tile,
-    paddingHorizontal: 12,
-    paddingVertical: 11,
+    paddingHorizontal: 13,
+    paddingVertical: 12,
     gap: 3,
   },
   label: {
-    ...type.caption,
+    ...type.metaSmall,
+    fontSize: 11,
     color: colors.text.muted,
   },
   valueRow: {
@@ -67,6 +91,8 @@ const styles = StyleSheet.create({
   },
   value: {
     ...type.stat,
+    fontSize: 19,
+    fontWeight: '600',
     color: colors.text.primary,
     flexShrink: 1,
   },
@@ -76,12 +102,13 @@ const styles = StyleSheet.create({
   },
   meta: {
     ...type.caption,
+    fontSize: 11,
     color: colors.text.faint,
     ...tabularNums,
   },
   empty: {
     ...type.metaSmall,
     color: colors.text.muted,
-    paddingVertical: 4,
+    paddingVertical: 3,
   },
 });

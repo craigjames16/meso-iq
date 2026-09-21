@@ -44,14 +44,24 @@ export async function flush(times = 5): Promise<void> {
   }
 }
 
-/** All text rendered on screen, joined by newlines. */
+/** All text rendered on screen: one line per outermost Text, with nested Text joined inline. */
 export function textOf(root: ReactTestInstance): string {
+  const collect = (node: ReactTestInstance | string): string => {
+    if (typeof node === 'string') return node;
+    return node.children.map((c) => collect(c as ReactTestInstance | string)).join('');
+  };
+  const isNested = (node: ReactTestInstance) => {
+    let p = node.parent;
+    while (p) {
+      if (p.type === Text) return true;
+      p = p.parent;
+    }
+    return false;
+  };
   return root
     .findAllByType(Text)
-    .map((t) => {
-      const c = t.props.children;
-      return Array.isArray(c) ? c.flat(Infinity).filter((x: unknown) => typeof x === 'string' || typeof x === 'number').join('') : typeof c === 'string' || typeof c === 'number' ? String(c) : '';
-    })
+    .filter((t) => !isNested(t))
+    .map((t) => collect(t))
     .join('\n');
 }
 

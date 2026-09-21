@@ -50,10 +50,19 @@ export function sessionFromInstance(instance: WorkoutInstance): Session | null {
   if (!instance.completedAt) return null;
   const pid = instance.planInstanceDays?.[0];
   const names: Record<number, string> = {};
-  const sets: SetRecord[] = (instance.exerciseSets ?? []).map((s) => {
-    if (s.exercise?.name) names[s.exerciseId] = s.exercise.name;
-    return toSetRecord(s);
-  });
+  // History returns top-level exerciseSets; GET /api/workout-instances/:id
+  // nests each exercise's sets under workoutExercises instead.
+  const nested = (instance.workoutExercises ?? []) as Array<{
+    exerciseId: number;
+    sets?: Array<{ weight: number; reps: number; setNumber: number; subSetNumber?: number | null; setType?: unknown }>;
+  }>;
+  const sets: SetRecord[] =
+    instance.exerciseSets && instance.exerciseSets.length > 0
+      ? instance.exerciseSets.map((s) => {
+          if (s.exercise?.name) names[s.exerciseId] = s.exercise.name;
+          return toSetRecord(s);
+        })
+      : nested.flatMap((we) => (we.sets ?? []).map((s) => toSetRecord({ ...s, exerciseId: we.exerciseId })));
   const order = [...(instance.workoutExercises ?? [])]
     .sort((a, b) => a.order - b.order)
     .map((we) => {
