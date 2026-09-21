@@ -315,3 +315,16 @@ Each function gets a test file. Cover at least these cases:
 - **`weightRepMatrix`**: row selection with more than 6 weights; quartile levels; empty input.
 - **`tonnageByMonth`**: `avg3` is `null` for the first two months; the current month is partial.
 - **`cycleE1rmDelta`**: skips single-iteration exercises; averages without weighting.
+
+## Implementation notes
+
+These record where the Phase 4 build refines the definitions above.
+
+- **Cycle data source**: `GET /api/dashboard?data=mesocycle` returns sets without `subSetNumber` or `setType`. `MesocycleProgressInput` is built from training history instead (`cycleProgressFromSessions`), where each session carries its mesocycle and week through `planInstanceDays`. History covers about one year, which spans any running or recent cycle.
+- **`cycleE1rmDelta`**: `average` is `null` when no exercise was logged in two weeks, so the UI can show "Not enough sessions yet" rather than 0%.
+- **`sessionPRs`**: `prior` is a list of per-exercise histories from `GET /api/exercises/:id`. An exercise with no earlier session sets no record. Each exercise reports its e1RM record if it has one, otherwise its heaviest reps-at-weight record, which needs at least one earlier main set at that weight or heavier.
+- **`weightRepMatrix`**: quartiles use linear interpolation over the sorted non-zero counts. The most frequent cell is always level 4, so a matrix where every cell has the same count still reads as bright.
+- **`matrixCaption`**: reports the most reps ever done at the heaviest weight: "You have never lifted 205 lb for more than 6 reps."
+- **`lowVolumeMuscles`**: only muscles the program trains (more than 0 starting sets) can trigger the warning.
+- **`tonnageByMonth`**: takes an optional `today` for testing. For the current year it returns months up to today's month.
+- **Adherence in History**: `useConsistency` sums `adherence` over every mesocycle with a session in the selected year.

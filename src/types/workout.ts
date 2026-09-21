@@ -69,11 +69,14 @@ export interface WorkoutInstance {
     id: number;
     exerciseId: number;
     setNumber: number;
+    subSetNumber?: number | null;
+    setType?: 'REGULAR' | 'DROP_SET' | 'REST_PAUSE' | 'MYO_REP';
     weight: number;
     reps: number;
     exercise: {
       id: number;
       name: string;
+      category?: string;
     };
   }>;
   workoutExercises?: Array<{
@@ -83,6 +86,7 @@ export interface WorkoutInstance {
     exercise: {
       id: number;
       name: string;
+      category?: string;
     };
     workout?: {
       id: number;
