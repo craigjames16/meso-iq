@@ -56,17 +56,7 @@ export const AppNavigator: React.FC = () => {
           }}
         >
           <Stack.Screen name="Main" component={MainNavigator} />
-          <Stack.Screen 
-            name="WorkoutDetail" 
-            component={WorkoutDetailScreen}
-            options={{
-              headerShown: true,
-              headerStyle: { backgroundColor: colors.bg },
-              headerTintColor: colors.text.primary,
-              headerTitleStyle: { fontWeight: 'bold' },
-              title: 'Workout', // fallback until screen sets Week X - Day Y
-            }}
-          />
+          <Stack.Screen name="WorkoutDetail" component={WorkoutDetailScreen} />
           <Stack.Screen
             name="WorkoutComplete"
             component={WorkoutCompleteScreen}

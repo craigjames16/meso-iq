@@ -15,7 +15,7 @@ export interface ExerciseDetailResponse {
       reps: number;
       setNumber: number;
       subSetNumber?: number | null;
-      setType?: 'REGULAR' | 'DROP_SET' | 'MYO_REP';
+      setType?: 'REGULAR' | 'DROP_SET' | 'REST_PAUSE' | 'MYO_REP';
     }>;
   }>;
   volumeProgression?: Array<{ workoutInstanceId: number; date: string; volume: number; sets: number }>;

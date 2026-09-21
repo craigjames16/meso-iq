@@ -1,5 +1,6 @@
 import { apiClient } from '../api/client';
 import { endpoints } from '../api/endpoints';
+import type { ClientSetType } from '../components/logger/types';
 import { CurrentMesocycle, ScheduleData, WorkoutInstance, LatestWorkoutResponse, HistoryData, UpcomingData } from '../types/workout';
 
 export const workoutService = {
@@ -153,7 +154,7 @@ export const workoutService = {
     reps: number, 
     setNumber: number,
     subSetNumber?: number | null,
-    setType?: 'REGULAR' | 'DROP_SET' | 'MYO_REP'
+    setType?: ClientSetType
   ): Promise<any> {
     try {
       const response = await apiClient.post<any>(
@@ -175,7 +176,7 @@ export const workoutService = {
     }
   },
 
-  async convertSetType(workoutInstanceId: number, setId: number, setType: 'REGULAR' | 'DROP_SET' | 'MYO_REP'): Promise<any> {
+  async convertSetType(workoutInstanceId: number, setId: number, setType: ClientSetType): Promise<any> {
     try {
       const response = await apiClient.patch<any>(
         `/api/workout-instances/${workoutInstanceId}/sets/${setId}`,

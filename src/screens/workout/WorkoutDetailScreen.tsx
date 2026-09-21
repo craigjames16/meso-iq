@@ -1,47 +1,60 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ActivityIndicator,
-  ScrollView,
-  TouchableOpacity,
-  Alert,
-  Animated,
-} from 'react-native';
-import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
-import { workoutService } from '../../services/workoutService';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { RootStackParamList } from '../../navigation/AppNavigator';
-import { ExerciseTrackingCard, type ExerciseTracking } from '../../components/ExerciseTrackingCard';
-import { DropdownMenu } from '../../components/DropdownMenu';
-import { ConfirmationModal } from '../../components/ConfirmationModal';
-import { AddExerciseModal } from '../../components/plan/AddExerciseModal';
-import { exercisesService } from '../../services/exercisesService';
-import type { ExerciseDetailData } from '../../utils/workoutTrackingResolver';
-import { ExerciseListItem } from '../../types/plan';
-import { themeColors, spacing, borderRadius } from '../../theme/colors';
+import { workoutService } from '../../services/workoutService';
 import { useSchedule } from '../../context/ScheduleContext';
 import { useWorkoutInstance } from '../../context/WorkoutInstanceContext';
+import type { ExerciseDetailData } from '../../utils/workoutTrackingResolver';
+import { ExerciseCard } from '../../components/logger/ExerciseCard';
+import { SetMenuSheet } from '../../components/logger/SetMenuSheet';
+import {
+  addAttached,
+  addSet,
+  changeType,
+  deleteSet,
+  duplicateSet,
+  insertSetBelow,
+  isAttached,
+  mainSetProgress,
+  renumberedSaved,
+} from '../../components/logger/setOps';
+import type { AttachedSetType, ClientSetType, ExerciseSet, ExerciseTracking } from '../../components/logger/types';
+import { AddExerciseSheet } from '../../components/exercise/AddExerciseSheet';
+import {
+  Button,
+  Card,
+  ChevronGlyph,
+  EmptyState,
+  ErrorState,
+  IconButton,
+  MenuAction,
+  MenuGroup,
+  MoreGlyph,
+  PlusGlyph,
+  Sheet,
+  Skeleton,
+  Tag,
+} from '../../components/ui';
+import { colors, radius, space, type } from '../../theme';
+import { invalidateExerciseHistory } from '../../hooks/exerciseSessions';
+import { invalidateMesocycles } from '../../hooks/mesocycleData';
 
-// Categories will be extracted from backend response
+type WorkoutDetailRoute = RouteProp<RootStackParamList, 'WorkoutDetail'>;
+type WorkoutDetailNavigation = NativeStackNavigationProp<RootStackParamList, 'WorkoutDetail'>;
 
-type WorkoutDetailScreenRouteProp = RouteProp<RootStackParamList, 'WorkoutDetail'>;
-type WorkoutDetailScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'WorkoutDetail'>;
+const EMPTY_DETAIL: ExerciseDetailData = { history: [], lastVolume: null, lastSets: [] };
 
-const SCROLL_THRESHOLD = 60;
-const MESOCYCLE_NAME_MAX_LENGTH = 18;
-
-const EMPTY_EXERCISE_DETAIL: ExerciseDetailData = {
-  history: [],
-  lastVolume: null,
-  lastSets: [],
-};
+function errorText(err: unknown, fallback: string): string {
+  return err instanceof Error ? err.message : fallback;
+}
 
 export const WorkoutDetailScreen: React.FC = () => {
-  const route = useRoute<WorkoutDetailScreenRouteProp>();
-  const navigation = useNavigation<WorkoutDetailScreenNavigationProp>();
+  const route = useRoute<WorkoutDetailRoute>();
+  const navigation = useNavigation<WorkoutDetailNavigation>();
+  const insets = useSafeAreaInsets();
   const { workoutInstanceId } = route.params;
   const { refreshSchedule } = useSchedule();
   const {
@@ -57,844 +70,545 @@ export const WorkoutDetailScreen: React.FC = () => {
     syncWorkoutInstance,
   } = useWorkoutInstance();
 
-  const exerciseTrackings = trackingsMap[workoutInstanceId] ?? [];
+  const trackings = useMemo(() => trackingsMap[workoutInstanceId] ?? [], [trackingsMap, workoutInstanceId]);
   const [completing, setCompleting] = useState(false);
-  const [addExerciseModalVisible, setAddExerciseModalVisible] = useState(false);
-  const [menuVisible, setMenuVisible] = useState(false);
-  const [endWorkoutConfirmVisible, setEndWorkoutConfirmVisible] = useState(false);
-  const [availableExercises, setAvailableExercises] = useState<ExerciseListItem[]>([]);
-  const [creatingExercise, setCreatingExercise] = useState(false);
-  const scrollY = useRef(new Animated.Value(0)).current;
+  const [addOpen, setAddOpen] = useState(false);
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  const [setMenu, setSetMenu] = useState<{ exerciseIndex: number; setIndex: number } | null>(null);
+  const [edited, setEdited] = useState(false);
 
   useEffect(() => {
     loadWorkoutData(workoutInstanceId);
   }, [workoutInstanceId, loadWorkoutData]);
 
-  // Set nav header title (Week X - Day Y) and menu button
-  useEffect(() => {
-    if (!workoutInstance || workoutInstance.id !== workoutInstanceId) return;
-    const planDay = workoutInstance.planInstanceDays?.[0]?.planDay;
-    const planInstance = workoutInstance.planInstanceDays?.[0]?.planInstance;
-    const hasPlanContext = planDay != null && planInstance != null;
-    const week = planInstance?.iterationNumber;
-    const day = planDay?.dayNumber;
-    const title =
-      hasPlanContext && typeof week === 'number' && typeof day === 'number'
-        ? `Week ${week} - Day ${day}`
-        : workoutInstance.workout?.name || 'Workout';
-    const isWorkoutCompleted = !!workoutInstance.completedAt;
-    navigation.setOptions({
-      title,
-      headerRight: () => (
-        <TouchableOpacity
-          onPress={() => setMenuVisible(true)}
-          disabled={isWorkoutCompleted}
-          style={{ padding: 8 }}
-        >
-          <MaterialIcons
-            name="more-vert"
-            size={24}
-            color={isWorkoutCompleted ? '#666' : '#999'}
-          />
-        </TouchableOpacity>
-      ),
-    });
-  }, [workoutInstance, workoutInstanceId, navigation]);
+  const reload = useCallback(async () => {
+    clearWorkoutTrackings(workoutInstanceId);
+    await loadWorkoutData(workoutInstanceId);
+  }, [clearWorkoutTrackings, loadWorkoutData, workoutInstanceId]);
 
-  const fetchExercisesForModal = useCallback(async () => {
-    try {
-      const exercisesData = await workoutService.getExercises();
-      let exercisesArray: ExerciseListItem[] = [];
-      if (exercisesData && typeof exercisesData === 'object' && Object.keys(exercisesData).length === 0) {
-        setAvailableExercises([]);
-        return;
-      }
-      if (Array.isArray(exercisesData)) {
-        exercisesArray = exercisesData.map((exercise: any) => ({
-          ...exercise,
-          category: (exercise.category || '').toUpperCase(),
-          highestWeight: exercise.highestWeight || 0,
-        }));
-      } else if (typeof exercisesData === 'object' && exercisesData !== null) {
-        exercisesArray = Object.entries(exercisesData).flatMap(([category, exerciseList]: [string, any]) => {
-          if (!Array.isArray(exerciseList)) return [];
-          return exerciseList.map((exercise: any) => ({
-            ...exercise,
-            category: (exercise.category || category || '').toUpperCase(),
-            highestWeight: exercise.highestWeight || 0,
-          }));
-        });
-      }
-      setAvailableExercises(exercisesArray);
-    } catch (err) {
-      console.error('Error fetching exercises:', err);
-      setAvailableExercises([]);
-    }
-  }, []);
+  // --- State helpers -------------------------------------------------------
 
-  const handleUpdateSet = (
-    exerciseIndex: number,
-    setIndex: number,
-    field: 'reps' | 'weight',
-    value: number
-  ) => {
-    updateExerciseTrackings(workoutInstanceId, (prev) => {
-      const updated = [...prev];
-      updated[exerciseIndex] = {
-        ...updated[exerciseIndex],
-        sets: updated[exerciseIndex].sets.map((set, idx) =>
-          idx === setIndex ? { ...set, [field]: value } : set
-        ),
-      };
-      return updated;
-    });
+  const setSets = useCallback(
+    (exerciseIndex: number, update: (sets: ExerciseSet[]) => ExerciseSet[]) => {
+      updateExerciseTrackings(workoutInstanceId, (prev) =>
+        prev.map((t, i) => (i === exerciseIndex ? { ...t, sets: update(t.sets) } : t)),
+      );
+    },
+    [updateExerciseTrackings, workoutInstanceId],
+  );
+
+  const patchSetById = useCallback(
+    (exerciseIndex: number, id: number, patch: Partial<ExerciseSet>) => {
+      setSets(exerciseIndex, (sets) => sets.map((s) => (s.id === id ? { ...s, ...patch } : s)));
+    },
+    [setSets],
+  );
+
+  /**
+   * Applies a new set list for one exercise and saves what changed: removed
+   * sets are deleted, retyped sets are patched, and saved sets whose number
+   * changed are deleted and posted again, because the API can't renumber a set.
+   */
+  const commit = useCallback(
+    async (
+      exerciseIndex: number,
+      next: ExerciseSet[],
+      removed: ExerciseSet[] = [],
+      retyped: ExerciseSet[] = [],
+    ) => {
+      const tracking = trackings[exerciseIndex];
+      if (!tracking) return;
+      const before = tracking.sets;
+      const moved = renumberedSaved(before, next);
+      const movedIds = new Set(moved.map((s) => s.id));
+      setSets(exerciseIndex, () => next.map((s) => (movedIds.has(s.id) ? { ...s, loading: true } : s)));
+      setEdited(true);
+
+      try {
+        const removedIds = removed.filter((s) => s.id != null).map((s) => s.id as number);
+        const toDelete = [...removedIds, ...moved.map((s) => s.id as number)];
+        if (toDelete.length > 0) await workoutService.deleteSet(workoutInstanceId, toDelete);
+        for (const s of retyped) {
+          if (s.id != null && !movedIds.has(s.id)) {
+            await workoutService.convertSetType(workoutInstanceId, s.id, s.setType ?? 'REGULAR');
+          }
+        }
+        for (const s of moved) {
+          const response = await workoutService.addSet(
+            workoutInstanceId,
+            tracking.exerciseId,
+            s.weight,
+            s.reps,
+            s.setNumber ?? 1,
+            s.subSetNumber ?? null,
+            s.setType ?? 'REGULAR',
+          );
+          patchSetById(exerciseIndex, s.id as number, { id: response?.[0]?.id, loading: false });
+        }
+      } catch (err) {
+        Alert.alert("Couldn't save that change", errorText(err, 'Your sets were reloaded.'));
+        await reload();
+      }
+    },
+    [trackings, setSets, patchSetById, workoutInstanceId, reload],
+  );
+
+  // --- Set handlers --------------------------------------------------------
+
+  const handleChangeSet = (exerciseIndex: number, setIndex: number, field: 'weight' | 'reps', value: number) => {
+    setSets(exerciseIndex, (sets) => sets.map((s, i) => (i === setIndex ? { ...s, [field]: value } : s)));
   };
 
-  const handleSetCompletion = async (
-    exerciseIndex: number,
-    setIndex: number,
-    completed: boolean,
-    recommendedReps?: number
-  ) => {
-    const tracking = exerciseTrackings[exerciseIndex];
-    const set = tracking.sets[setIndex];
+  const handleToggleSet = async (exerciseIndex: number, setIndex: number, recommendedReps?: number) => {
+    const tracking = trackings[exerciseIndex];
+    const set = tracking?.sets[setIndex];
+    if (!tracking || !set) return;
+    setEdited(true);
 
-    if (!completed && set.id) {
-      // Delete set - optimistic update
-      updateExerciseTrackings(workoutInstanceId, (prev: ExerciseTracking[]) => {
-        const updated = [...prev];
-        updated[exerciseIndex].sets[setIndex] = {
-          ...updated[exerciseIndex].sets[setIndex],
-          id: undefined,
-          completed: false,
-          loading: false,
-        };
-        return updated;
-      });
-
+    if (set.completed && set.id) {
+      setSets(exerciseIndex, (sets) =>
+        sets.map((s, i) => (i === setIndex ? { ...s, id: undefined, completed: false, loading: false } : s)),
+      );
       try {
         await workoutService.deleteSet(workoutInstanceId, [set.id]);
       } catch (err) {
-        console.error('Error in handleSetCompletion:', err);
-        // Revert on error
-        updateExerciseTrackings(workoutInstanceId, (prev: ExerciseTracking[]) => {
-          const updated = [...prev];
-          updated[exerciseIndex].sets[setIndex] = {
-            ...updated[exerciseIndex].sets[setIndex],
-            id: set.id,
-            completed: true,
-            loading: false,
-          };
-          return updated;
-        });
-        Alert.alert('Error', err instanceof Error ? err.message : 'Failed to delete set');
-      }
-    } else if (completed) {
-      // Add set - optimistic update (use recommended reps when user left reps empty)
-      const weightToUse = set.weight || set.lastSet?.weight || 0;
-      const repsToUse = set.reps || (recommendedReps ?? set.lastSet?.reps ?? 0);
-
-      // Optimistically mark as completed and loading
-      updateExerciseTrackings(workoutInstanceId, (prev) => {
-        const updated = [...prev];
-        updated[exerciseIndex].sets[setIndex] = {
-          ...updated[exerciseIndex].sets[setIndex],
-          completed: true,
-          loading: true,
-          weight: weightToUse,
-          reps: repsToUse,
-        };
-        return updated;
-      });
-
-      try {
-        const set = tracking.sets[setIndex];
-        const response = await workoutService.addSet(
-          workoutInstanceId,
-          tracking.exerciseId,
-          weightToUse,
-          repsToUse,
-          set.setNumber || setIndex + 1,
-          set.subSetNumber ?? null,
-          set.setType || 'REGULAR'
+        setSets(exerciseIndex, (sets) =>
+          sets.map((s, i) => (i === setIndex ? { ...s, id: set.id, completed: true, loading: false } : s)),
         );
-
-        const newSetId = response[0]?.id;
-        // Update with actual ID and remove loading
-        updateExerciseTrackings(workoutInstanceId, (prev) => {
-          const updated = [...prev];
-          updated[exerciseIndex].sets[setIndex] = {
-            ...updated[exerciseIndex].sets[setIndex],
-            id: newSetId,
-            completed: true,
-            loading: false,
-          };
-          return updated;
-        });
-      } catch (err) {
-        console.error('Error in handleSetCompletion:', err);
-        // Revert on error
-        updateExerciseTrackings(workoutInstanceId, (prev) => {
-          const updated = [...prev];
-          updated[exerciseIndex].sets[setIndex] = {
-            ...updated[exerciseIndex].sets[setIndex],
-            completed: false,
-            loading: false,
-            id: undefined,
-          };
-          return updated;
-        });
-        Alert.alert('Error', err instanceof Error ? err.message : 'Failed to update set');
+        Alert.alert("Couldn't uncheck the set", errorText(err, 'Try again.'));
       }
+      return;
+    }
+
+    if (set.completed) return;
+    const weight = set.weight || set.lastSet?.weight || 0;
+    const reps = set.reps || (recommendedReps ?? set.lastSet?.reps ?? 0);
+    setSets(exerciseIndex, (sets) =>
+      sets.map((s, i) => (i === setIndex ? { ...s, completed: true, loading: true, weight, reps } : s)),
+    );
+    try {
+      const response = await workoutService.addSet(
+        workoutInstanceId,
+        tracking.exerciseId,
+        weight,
+        reps,
+        set.setNumber || setIndex + 1,
+        set.subSetNumber ?? null,
+        set.setType || 'REGULAR',
+      );
+      const newId = response?.[0]?.id;
+      setSets(exerciseIndex, (sets) =>
+        sets.map((s, i) => (i === setIndex ? { ...s, id: newId, completed: true, loading: false } : s)),
+      );
+    } catch (err) {
+      setSets(exerciseIndex, (sets) =>
+        sets.map((s, i) => (i === setIndex ? { ...s, id: undefined, completed: false, loading: false } : s)),
+      );
+      Alert.alert("Couldn't log the set", errorText(err, 'Try again.'));
     }
   };
 
-  const handleCompleteWorkout = async () => {
+  const handleAddSet = (exerciseIndex: number) => {
+    const t = trackings[exerciseIndex];
+    if (t) commit(exerciseIndex, addSet(t.sets));
+  };
+
+  const handleAddAttached = (exerciseIndex: number, parentIndex: number, technique: AttachedSetType) => {
+    const t = trackings[exerciseIndex];
+    if (t) commit(exerciseIndex, addAttached(t.sets, parentIndex, technique));
+  };
+
+  const closeSetMenu = () => setSetMenu(null);
+
+  const handleChooseType = (setType: ClientSetType) => {
+    if (!setMenu) return;
+    const { exerciseIndex, setIndex } = setMenu;
+    const t = trackings[exerciseIndex];
+    const parent = t?.sets[setIndex];
+    closeSetMenu();
+    if (!t || !parent || (parent.setType ?? 'REGULAR') === setType) return;
+
+    const { sets: next, removed } = changeType(t.sets, setIndex, setType);
+    const retyped = next.filter((s) => {
+      if (s.id == null) return false;
+      const prev = t.sets.find((p) => p.id === s.id);
+      return !!prev && (prev.setType ?? 'REGULAR') !== (s.setType ?? 'REGULAR');
+    });
+    const apply = () => commit(exerciseIndex, next, removed, retyped);
+
+    if (setType === 'REGULAR' && removed.length > 0) {
+      Alert.alert(
+        'Make this a straight set?',
+        `This removes ${removed.length} attached ${removed.length === 1 ? 'set' : 'sets'}.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Remove', style: 'destructive', onPress: apply },
+        ],
+      );
+    } else {
+      apply();
+    }
+  };
+
+  const withMenuSet = (fn: (exerciseIndex: number, sets: ExerciseSet[], setIndex: number) => void) => () => {
+    if (!setMenu) return;
+    const { exerciseIndex, setIndex } = setMenu;
+    const t = trackings[exerciseIndex];
+    closeSetMenu();
+    if (t) fn(exerciseIndex, t.sets, setIndex);
+  };
+
+  const handleDuplicate = withMenuSet((ei, sets, si) => commit(ei, duplicateSet(sets, si)));
+  const handleInsertBelow = withMenuSet((ei, sets, si) => commit(ei, insertSetBelow(sets, si)));
+  const handleDeleteSet = withMenuSet((ei, sets, si) => {
+    const { sets: next, removed } = deleteSet(sets, si);
+    commit(ei, next, removed);
+  });
+
+  // --- Exercise handlers ---------------------------------------------------
+
+  const handleMove = async (exerciseIndex: number, direction: 'up' | 'down') => {
+    const t = trackings[exerciseIndex];
+    if (!t) return;
+    try {
+      await workoutService.reorderExercise(workoutInstanceId, t.exerciseId, direction);
+      const updated = await workoutService.getWorkoutInstance(workoutInstanceId);
+      await syncWorkoutInstance(workoutInstanceId, updated);
+    } catch (err) {
+      Alert.alert("Couldn't move the exercise", errorText(err, 'Try again.'));
+    }
+  };
+
+  const handleRemove = (exerciseIndex: number) => {
+    const t = trackings[exerciseIndex];
+    if (!t) return;
+    Alert.alert(`Remove ${t.exerciseName}?`, 'Its logged sets in this workout are removed too.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Remove',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            const updated = await workoutService.removeExercise(workoutInstanceId, t.exerciseId);
+            await syncWorkoutInstance(workoutInstanceId, updated);
+            setEdited(true);
+          } catch (err) {
+            Alert.alert("Couldn't remove the exercise", errorText(err, 'Try again.'));
+          }
+        },
+      },
+    ]);
+  };
+
+  const handleAddExercises = async (exercises: { id: number }[]) => {
+    const updated = await workoutService.addExercise(
+      workoutInstanceId,
+      exercises.map((e) => e.id),
+    );
+    await syncWorkoutInstance(workoutInstanceId, updated);
+    setEdited(true);
+    setAddOpen(false);
+  };
+
+  // --- Finish --------------------------------------------------------------
+
+  const allSets = trackings.flatMap((t) => t.sets);
+  const progress = mainSetProgress(allSets);
+  const isCompleted = !!workoutInstance?.completedAt;
+
+  const finish = async () => {
     try {
       setCompleting(true);
-      setEndWorkoutConfirmVisible(false);
       await workoutService.completeWorkout(workoutInstanceId);
       clearWorkoutTrackings(workoutInstanceId);
+      invalidateExerciseHistory();
+      invalidateMesocycles();
       try {
         await refreshSchedule();
-      } catch (scheduleError) {
-        console.error('Error refreshing schedule:', scheduleError);
+      } catch {
+        // Today refreshes again on focus.
       }
       navigation.replace('WorkoutComplete', { workoutInstanceId });
     } catch (err) {
-      console.error('Error completing workout:', err);
-      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to complete workout');
+      Alert.alert("Couldn't finish the workout", errorText(err, 'Try again.'));
     } finally {
       setCompleting(false);
     }
   };
 
-  const handleAddSet = (exerciseIndex: number) => {
-    updateExerciseTrackings(workoutInstanceId, (prev) => {
-      const updated = [...prev];
-      const exercise = updated[exerciseIndex];
-      const mainSets = exercise.sets.filter(s => s.subSetNumber === null || s.subSetNumber === undefined);
-      const nextSetNumber = mainSets.length > 0
-        ? Math.max(...mainSets.map(s => s.setNumber || 0)) + 1
-        : exercise.sets.length + 1;
-      updated[exerciseIndex] = {
-        ...exercise,
-        sets: [
-          ...exercise.sets,
-          {
-            reps: 0,
-            weight: 0,
-            setNumber: nextSetNumber,
-            subSetNumber: null,
-            setType: 'REGULAR',
-            completed: false,
-          },
+  const handleFinish = () => {
+    const unchecked = progress.total - progress.done;
+    if (unchecked > 0) {
+      Alert.alert(
+        `${unchecked} ${unchecked === 1 ? "set isn't" : "sets aren't"} checked. Finish anyway?`,
+        'Unchecked sets are not saved.',
+        [
+          { text: 'Keep logging', style: 'cancel' },
+          { text: 'Finish', onPress: finish },
         ],
-      };
-      return updated;
-    });
-  };
-
-  const handleRemoveExercise = async (exerciseIndex: number) => {
-    const exercise = exerciseTrackings[exerciseIndex];
-    try {
-      const updatedInstance = await workoutService.removeExercise(workoutInstanceId, exercise.exerciseId);
-      await syncWorkoutInstance(workoutInstanceId, updatedInstance);
-    } catch (err) {
-      console.error('Error removing exercise:', err);
-      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to remove exercise');
+      );
+    } else {
+      finish();
     }
   };
 
-  const handleReorderExercise = async (exerciseIndex: number, direction: 'up' | 'down') => {
-    try {
-      const exercise = exerciseTrackings[exerciseIndex];
-      await workoutService.reorderExercise(workoutInstanceId, exercise.exerciseId, direction);
-      const updatedInstance = await workoutService.getWorkoutInstance(workoutInstanceId);
-      await syncWorkoutInstance(workoutInstanceId, updatedInstance);
-    } catch (err) {
-      console.error('Error reordering exercise:', err);
-      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to reorder exercise');
+  const handleDone = async () => {
+    if (edited) {
+      clearWorkoutTrackings(workoutInstanceId);
+      invalidateExerciseHistory();
+      invalidateMesocycles();
+      refreshSchedule().catch(() => undefined);
     }
+    navigation.goBack();
   };
 
-  const handleRemoveSet = async (exerciseIndex: number, setIndex: number) => {
-    const tracking = exerciseTrackings[exerciseIndex];
-    const set = tracking.sets[setIndex];
+  // --- Render --------------------------------------------------------------
 
-    // If set is completed (has an id), delete it via API
-    if (set.id) {
-      try {
-        await workoutService.deleteSet(workoutInstanceId, [set.id]);
-      } catch (err) {
-        console.error('Error deleting set:', err);
-        Alert.alert('Error', err instanceof Error ? err.message : 'Failed to delete set');
-        return;
-      }
-    }
+  const pid = workoutInstance?.planInstanceDays?.[0];
+  const planInstance = pid?.planInstance;
+  const hasPlan = pid?.planDay != null && planInstance != null;
+  const title = workoutInstance?.workout?.name ?? 'Workout';
+  const meta = hasPlan
+    ? [planInstance?.mesocycle?.name, planInstance?.iterationNumber != null && `Week ${planInstance.iterationNumber}`, pid?.planDay?.dayNumber != null && `Day ${pid.planDay.dayNumber}`]
+        .filter(Boolean)
+        .join(' · ')
+    : 'Off-plan';
+  const rir = hasPlan ? planInstance?.rir : null;
+  const activeIndex = trackings.findIndex((t) => t.sets.some((s) => !isAttached(s) && !s.completed));
+  const menuTracking: ExerciseTracking | undefined = setMenu ? trackings[setMenu.exerciseIndex] : undefined;
+  const menuSet = setMenu && menuTracking ? menuTracking.sets[setMenu.setIndex] : undefined;
+  const menuParentIndex = (() => {
+    if (!setMenu || !menuTracking) return 0;
+    let i = setMenu.setIndex;
+    while (i > 0 && isAttached(menuTracking.sets[i])) i -= 1;
+    return i;
+  })();
+  const menuLabel = menuSet
+    ? isAttached(menuSet)
+      ? `Set ${menuSet.setNumber}.${menuSet.subSetNumber}`
+      : `Set ${menuSet.setNumber}`
+    : '';
+  const menuValues =
+    menuSet && (menuSet.weight || menuSet.reps)
+      ? `${menuSet.weight} × ${menuSet.reps}`
+      : menuSet?.lastSet
+        ? `Last ${menuSet.lastSet.weight} × ${menuSet.lastSet.reps}`
+        : null;
 
-    // Remove set from state
-    updateExerciseTrackings(workoutInstanceId, (prev) => {
-      const updated = [...prev];
-      updated[exerciseIndex] = {
-        ...updated[exerciseIndex],
-        sets: updated[exerciseIndex].sets.filter((_, idx) => idx !== setIndex),
-      };
-      return updated;
-    });
-  };
-
-  const handleConvertSetType = async (
-    exerciseIndex: number,
-    setIndex: number,
-    setType: 'REGULAR' | 'DROP_SET' | 'MYO_REP'
-  ) => {
-    const tracking = exerciseTrackings[exerciseIndex];
-    const set = tracking.sets[setIndex];
-
-    // For incomplete sets, update local state and add blank sub-set if needed
-    if (!set.id) {
-      updateExerciseTrackings(workoutInstanceId, (prev) => {
-        const updated = [...prev];
-        const currentSet = updated[exerciseIndex].sets[setIndex];
-        
-        // Update the set type
-        updated[exerciseIndex].sets[setIndex] = {
-          ...currentSet,
-          setType,
-        };
-
-        // If converting to DROP_SET or MYO_REP, add a blank sub-set
-        if ((setType === 'DROP_SET' || setType === 'MYO_REP') && currentSet.setNumber) {
-          // Check if there are already sub-sets for this set number
-          const existingSubSets = updated[exerciseIndex].sets.filter(
-            (s) => s.setNumber === currentSet.setNumber && 
-                   s.subSetNumber !== null && 
-                   s.subSetNumber !== undefined
-          );
-          
-          // Only add if no sub-sets exist yet
-          if (existingSubSets.length === 0) {
-            // Find the insertion point (after the parent set and any existing sub-sets)
-            let insertIndex = setIndex + 1;
-            while (
-              insertIndex < updated[exerciseIndex].sets.length &&
-              updated[exerciseIndex].sets[insertIndex].setNumber === currentSet.setNumber &&
-              updated[exerciseIndex].sets[insertIndex].subSetNumber !== null &&
-              updated[exerciseIndex].sets[insertIndex].subSetNumber !== undefined
-            ) {
-              insertIndex++;
-            }
-
-            // Add blank sub-set
-            updated[exerciseIndex].sets.splice(insertIndex, 0, {
-              reps: 0,
-              weight: 0,
-              setNumber: currentSet.setNumber,
-              subSetNumber: 1,
-              setType: setType,
-              completed: false,
-            });
-          }
-        } else if (setType === 'REGULAR') {
-          // If converting to REGULAR, remove any existing sub-sets for this set number
-          updated[exerciseIndex].sets = updated[exerciseIndex].sets.filter(
-            (s, idx) => !(
-              s.setNumber === currentSet.setNumber && 
-              s.subSetNumber !== null && 
-              s.subSetNumber !== undefined &&
-              idx !== setIndex
-            )
-          );
-        }
-
-        return updated;
-      });
-      return;
-    }
-
-    // For completed sets, update via API
-    try {
-      await workoutService.convertSetType(workoutInstanceId, set.id, setType);
-      
-      // Update local state
-      updateExerciseTrackings(workoutInstanceId, (prev) => {
-        const updated = [...prev];
-        updated[exerciseIndex].sets[setIndex] = {
-          ...updated[exerciseIndex].sets[setIndex],
-          setType,
-        };
-        return updated;
-      });
-    } catch (err) {
-      console.error('Error converting set type:', err);
-      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to convert set type');
-    }
-  };
-
-  const handleAddSubSet = (exerciseIndex: number, parentSetIndex: number) => {
-    const tracking = exerciseTrackings[exerciseIndex];
-    const parentSet = tracking.sets[parentSetIndex];
-
-    if (!parentSet.setNumber) {
-      Alert.alert('Error', 'Invalid parent set');
-      return;
-    }
-
-    // Check if parent set is a DROP_SET or MYO_REP
-    if (parentSet.setType !== 'DROP_SET' && parentSet.setType !== 'MYO_REP') {
-      Alert.alert('Error', 'Parent set must be a Drop Set or Myo Rep Set');
-      return;
-    }
-
-    // Find existing sub-sets for this parent set number
-    const existingSubSets = tracking.sets.filter(
-      (s) => s.setNumber === parentSet.setNumber && 
-             s.subSetNumber !== null && 
-             s.subSetNumber !== undefined
-    );
-
-    const maxSubSetNumber = existingSubSets.length > 0
-      ? Math.max(...existingSubSets.map((s) => s.subSetNumber || 0))
-      : 0;
-
-    const nextSubSetNumber = maxSubSetNumber + 1;
-
-    const weightToUse = parentSet.weight || 0;
-    const repsToUse = parentSet.reps || 0;
-
-    // Find the index where to insert the sub-set (after parent and any existing sub-sets)
-    let insertIndex = parentSetIndex + 1;
-    while (
-      insertIndex < tracking.sets.length &&
-      tracking.sets[insertIndex].setNumber === parentSet.setNumber &&
-      tracking.sets[insertIndex].subSetNumber !== null &&
-      tracking.sets[insertIndex].subSetNumber !== undefined
-    ) {
-      insertIndex++;
-    }
-
-    // Add blank sub-set to state (not completed)
-    updateExerciseTrackings(workoutInstanceId, (prev) => {
-      const updated = [...prev];
-      updated[exerciseIndex] = {
-        ...updated[exerciseIndex],
-        sets: [
-          ...updated[exerciseIndex].sets.slice(0, insertIndex),
-          {
-            reps: repsToUse,
-            weight: weightToUse,
-            setNumber: parentSet.setNumber,
-            subSetNumber: nextSubSetNumber,
-            setType: parentSet.setType || 'DROP_SET',
-            completed: false,
-          },
-          ...updated[exerciseIndex].sets.slice(insertIndex),
-        ],
-      };
-      return updated;
-    });
-  };
-
-  const handleSelectExercises = async (exercises: ExerciseListItem[]) => {
-    try {
-      const exerciseIds = exercises.map((ex) => ex.id);
-      const updatedInstance = await workoutService.addExercise(workoutInstanceId, exerciseIds);
-      await syncWorkoutInstance(workoutInstanceId, updatedInstance);
-      setAddExerciseModalVisible(false);
-    } catch (err: any) {
-      console.error('Error adding exercises:', err);
-      const errorMessage = err?.message || err?.error || err?.errorData?.message || 'Failed to add exercises';
-      Alert.alert('Error', errorMessage);
-    }
-  };
-
-  const openAddExerciseModal = useCallback(() => {
-    fetchExercisesForModal();
-    setAddExerciseModalVisible(true);
-  }, [fetchExercisesForModal]);
-
-  const handleCreateExercise = async (name: string, category: string) => {
-    try {
-      setCreatingExercise(true);
-      const newExercise = await exercisesService.createExercise({ name, category });
-      
-      // Refresh exercises list
-      const exercisesData = await workoutService.getExercises();
-      
-      // Transform exercises data to ExerciseListItem[] format
-      let exercisesArray: ExerciseListItem[] = [];
-      
-      if (Array.isArray(exercisesData)) {
-        exercisesArray = exercisesData.map((exercise: any) => ({
-          ...exercise,
-          category: (exercise.category || '').toUpperCase(),
-          highestWeight: exercise.highestWeight || 0,
-        }));
-      } else if (typeof exercisesData === 'object' && exercisesData !== null) {
-        exercisesArray = Object.entries(exercisesData).flatMap(([category, exerciseList]: [string, any]) => {
-          if (!Array.isArray(exerciseList)) {
-            return [];
-          }
-          return exerciseList.map((exercise: any) => ({
-            ...exercise,
-            category: (exercise.category || category || '').toUpperCase(),
-            highestWeight: exercise.highestWeight || 0,
-          }));
-        });
-      }
-      
-      setAvailableExercises(exercisesArray);
-      
-      // Auto-select the newly created exercise
-      const exerciseToSelect = exercisesArray.find((ex) => ex.id === newExercise.id);
-      if (exerciseToSelect) {
-        await handleSelectExercises([exerciseToSelect]);
-      }
-    } catch (err: any) {
-      console.error('Failed to create exercise', err);
-      Alert.alert('Error', err.message || 'Failed to create exercise');
-      throw err;
-    } finally {
-      setCreatingExercise(false);
-    }
-  };
-
-
-  if (loading || trackingsLoading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#fff" />
-      </View>
-    );
-  }
-
-  if (error || !workoutInstance) {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.errorText}>{error || 'Workout not found'}</Text>
-      </View>
-    );
-  }
-
-  const completedSets = exerciseTrackings.reduce(
-    (total, exercise) => total + (exercise.sets || []).filter((set) => set.completed).length,
-    0
-  );
-  const totalSets = exerciseTrackings.reduce((total, exercise) => total + (exercise.sets || []).length, 0);
-  const isWorkoutCompleted = !!workoutInstance.completedAt;
-  const allSetsCompleted = exerciseTrackings.every((tracking) =>
-    tracking.sets?.every((set) => set.completed === true)
-  );
-
-  const planDay = workoutInstance.planInstanceDays?.[0]?.planDay;
-  const planInstance = workoutInstance.planInstanceDays?.[0]?.planInstance;
-  const hasPlanContext = planDay != null && planInstance != null;
-  const mesocycleName = planInstance?.mesocycle?.name;
-  const rir = planInstance?.rir;
-
-  const detailsOpacity = scrollY.interpolate({
-    inputRange: [0, SCROLL_THRESHOLD],
-    outputRange: [1, 0],
-    extrapolate: 'clamp',
-  });
-  const detailsMaxHeight = scrollY.interpolate({
-    inputRange: [0, SCROLL_THRESHOLD],
-    outputRange: [120, 0],
-    extrapolate: 'clamp',
-  });
-  const headerPaddingTop = scrollY.interpolate({
-    inputRange: [0, SCROLL_THRESHOLD],
-    outputRange: [16, 0],
-    extrapolate: 'clamp',
-  });
-  const headerPaddingBottom = scrollY.interpolate({
-    inputRange: [0, SCROLL_THRESHOLD],
-    outputRange: [12, 0],
-    extrapolate: 'clamp',
-  });
+  const loadingFirst = (loading || trackingsLoading) && trackings.length === 0;
+  const pct = progress.total > 0 ? progress.done / progress.total : 0;
 
   return (
-    <View style={styles.container}>
-      {/* Collapsible details: mesocycle subtitle + RIR & sets chips */}
-      <Animated.View style={[styles.header, { paddingTop: headerPaddingTop, paddingBottom: headerPaddingBottom }]}>
-        <Animated.View style={[styles.headerDetails, { opacity: detailsOpacity, maxHeight: detailsMaxHeight, overflow: 'hidden' }]}>
-          <View style={styles.headerRow}>
-            {mesocycleName ? (
-              <Text style={styles.mesocycleSubtitle} numberOfLines={1}>
-                {mesocycleName.length > MESOCYCLE_NAME_MAX_LENGTH
-                  ? `${mesocycleName.slice(0, MESOCYCLE_NAME_MAX_LENGTH)}…`
-                  : mesocycleName}
-              </Text>
-            ) : <View style={styles.mesocycleSubtitlePlaceholder} />}
-            <View style={styles.headerChips}>
-              {hasPlanContext && rir != null && (
-                <View style={styles.headerMetaChip}>
-                  <Text style={styles.headerMetaChipText}>RIR {rir}</Text>
-                </View>
-              )}
-              <View style={styles.headerMetaChip}>
-                <Text style={styles.headerMetaChipText}>{completedSets}/{totalSets} sets</Text>
-              </View>
-            </View>
-          </View>
-        </Animated.View>
-      </Animated.View>
-
-      {/* Exercise List */}
+    <View style={styles.root}>
       <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+        style={styles.root}
+        contentContainerStyle={[styles.content, { paddingTop: insets.top + space.screenTop, paddingBottom: 110 + insets.bottom }]}
+        keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
-        onScroll={Animated.event(
-          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: false }
-        )}
-        scrollEventThrottle={16}
+        automaticallyAdjustKeyboardInsets
       >
-        {exerciseTrackings.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No exercises in this workout</Text>
-            <Text style={styles.emptySubtext}>
-              Add your first exercise to begin tracking
+        <View style={styles.nav}>
+          <IconButton
+            icon={<ChevronGlyph direction="left" size={16} color={colors.text.body} strokeWidth={2} />}
+            onPress={isCompleted ? handleDone : () => navigation.goBack()}
+            accessibilityLabel="Back"
+            size={34}
+          />
+          <View style={styles.navTitles}>
+            <Text style={styles.title} numberOfLines={1} accessibilityRole="header">
+              {title}
             </Text>
-            <TouchableOpacity
-              style={[
-                styles.addExerciseEmptyButton,
-                isWorkoutCompleted && styles.addExerciseEmptyButtonDisabled
-              ]}
-              onPress={openAddExerciseModal}
-              disabled={isWorkoutCompleted}
-            >
-              <MaterialIcons name="add" size={20} color="#fff" />
-              <Text style={styles.addExerciseEmptyButtonText}>Add Exercise</Text>
-            </TouchableOpacity>
+            <Text style={styles.meta} numberOfLines={1}>
+              {isCompleted ? `${meta} · Editing a finished workout` : meta}
+            </Text>
           </View>
+          <IconButton
+            icon={<MoreGlyph color={colors.text.secondary} />}
+            onPress={() => setOptionsOpen(true)}
+            accessibilityLabel="Workout options"
+            size={34}
+          />
+        </View>
+
+        {error && trackings.length === 0 ? (
+          <ErrorState onRetry={reload} />
+        ) : loadingFirst ? (
+          <>
+            <Skeleton height={62} />
+            <Skeleton height={220} />
+            <Skeleton height={180} />
+          </>
         ) : (
-          exerciseTrackings.map((exercise, exerciseIndex) => (
-            <ExerciseTrackingCard
-              key={`${exercise.exerciseId}-${exerciseIndex}`}
-              exercise={exercise}
-              exerciseIndex={exerciseIndex}
-              workoutInstanceId={workoutInstanceId}
-              isWorkoutCompleted={isWorkoutCompleted}
-              totalExercises={exerciseTrackings.length}
-              workoutInstance={workoutInstance}
-              exerciseDetail={
-                exerciseDetailsMap[exercise.exerciseId] ?? EMPTY_EXERCISE_DETAIL
-              }
-              onUpdateSet={handleUpdateSet}
-              onSetCompletion={handleSetCompletion}
-              onAddSet={handleAddSet}
-              onRemoveExercise={handleRemoveExercise}
-              onReorderExercise={handleReorderExercise}
-              onRemoveSet={handleRemoveSet}
-              onConvertSetType={handleConvertSetType}
-              onAddSubSet={handleAddSubSet}
-            />
-          ))
+          <>
+            <Card padding={14} gap={10}>
+              <View style={styles.stripRow}>
+                {rir != null ? <Tag label={`TARGET RIR ${rir}`} /> : null}
+                <View style={styles.flex} />
+                <Text style={styles.stripCount}>
+                  <Text style={styles.stripDone}>{progress.done}</Text> of {progress.total} sets
+                </Text>
+              </View>
+              <View style={styles.track} accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: progress.total, now: progress.done }}>
+                <View style={[styles.fill, { width: `${Math.round(pct * 100)}%` }]} />
+              </View>
+            </Card>
+
+            {trackings.length === 0 ? (
+              <EmptyState message="No exercises yet. Add one to start logging." action={{ label: 'Add exercise', onPress: () => setAddOpen(true) }} />
+            ) : (
+              trackings.map((t, i) => (
+                <ExerciseCard
+                  key={t.exerciseId}
+                  tracking={t}
+                  detail={exerciseDetailsMap[t.exerciseId] ?? EMPTY_DETAIL}
+                  index={i}
+                  total={trackings.length}
+                  editable
+                  active={i === activeIndex && !isCompleted}
+                  onChangeSet={(si, field, value) => handleChangeSet(i, si, field, value)}
+                  onToggleSet={(si, reps) => handleToggleSet(i, si, reps)}
+                  onOpenSetMenu={(si) => setSetMenu({ exerciseIndex: i, setIndex: si })}
+                  onAddSet={() => handleAddSet(i)}
+                  onAddAttached={(pi, technique) => handleAddAttached(i, pi, technique)}
+                  onMove={(dir) => handleMove(i, dir)}
+                  onViewHistory={() => navigation.navigate('ExerciseDetail', { exerciseId: t.exerciseId })}
+                  onRemove={() => handleRemove(i)}
+                />
+              ))
+            )}
+
+            {trackings.length > 0 ? (
+              <Button label="Add exercise" variant="dashed" icon={<PlusGlyph />} onPress={() => setAddOpen(true)} full />
+            ) : null}
+          </>
         )}
       </ScrollView>
 
-      {/* Complete Workout Button */}
-      {exerciseTrackings.length > 0 && (
-        <View style={styles.footer}>
-          <TouchableOpacity
-            style={[
-              styles.completeWorkoutButton,
-              (!allSetsCompleted || isWorkoutCompleted || completing) && styles.completeWorkoutButtonDisabled,
-            ]}
-            onPress={handleCompleteWorkout}
-            disabled={!allSetsCompleted || isWorkoutCompleted || completing}
-          >
-            {completing ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <>
-                <Text style={styles.completeWorkoutText}>
-                  {isWorkoutCompleted ? 'Completed' : `Complete Workout (${completedSets}/${totalSets})`}
-                </Text>
-              </>
-            )}
-          </TouchableOpacity>
+      {trackings.length > 0 ? (
+        <View style={[styles.footer, { paddingBottom: 12 + insets.bottom }]}>
+          {isCompleted ? (
+            <Button label="Done" onPress={handleDone} full />
+          ) : (
+            <Button
+              label={`Finish workout · ${progress.done} of ${progress.total} sets`}
+              onPress={handleFinish}
+              loading={completing}
+              full
+            />
+          )}
         </View>
-      )}
+      ) : null}
 
-      {/* Menu Dropdown */}
-      <DropdownMenu
-        visible={menuVisible}
-        onClose={() => setMenuVisible(false)}
-        items={[
-          {
-            label: 'Add Exercise',
-            icon: 'add',
-            onPress: openAddExerciseModal,
-            disabled: isWorkoutCompleted,
-          },
-          {
-            label: 'End Workout',
-            icon: 'check-circle',
-            onPress: () => {
-              setMenuVisible(false);
-              setEndWorkoutConfirmVisible(true);
-            },
-            disabled: isWorkoutCompleted || completing,
-          },
-        ]}
+      <Sheet visible={optionsOpen} onClose={() => setOptionsOpen(false)} title={title} subtitle={meta}>
+        <MenuGroup>
+          <MenuAction
+            label="Add exercise"
+            onPress={() => {
+              setOptionsOpen(false);
+              setAddOpen(true);
+            }}
+          />
+          {!isCompleted && trackings.length > 0 ? (
+            <MenuAction
+              label="Finish workout"
+              onPress={() => {
+                setOptionsOpen(false);
+                handleFinish();
+              }}
+            />
+          ) : null}
+        </MenuGroup>
+      </Sheet>
+
+      <SetMenuSheet
+        visible={!!menuSet}
+        onClose={closeSetMenu}
+        title={menuLabel}
+        subtitle={[menuTracking?.exerciseName, menuValues].filter(Boolean).join(' · ')}
+        attached={!!menuSet && isAttached(menuSet)}
+        currentType={(menuTracking?.sets[menuParentIndex]?.setType ?? 'REGULAR') as ClientSetType}
+        onChooseType={handleChooseType}
+        onDuplicate={handleDuplicate}
+        onInsertBelow={handleInsertBelow}
+        onDelete={handleDeleteSet}
       />
 
-      {/* End Workout Confirmation Modal */}
-      <ConfirmationModal
-        visible={endWorkoutConfirmVisible}
-        onClose={() => setEndWorkoutConfirmVisible(false)}
-        onConfirm={handleCompleteWorkout}
-        title="End Workout"
-        message={
-          allSetsCompleted
-            ? 'Are you sure you want to end this workout?'
-            : `You have ${totalSets - completedSets} incomplete set${totalSets - completedSets > 1 ? 's' : ''}. Are you sure you want to end this workout?`
-        }
-        confirmText="End Workout"
-        cancelText="Cancel"
-        confirmButtonStyle="default"
-        loading={completing}
+      <AddExerciseSheet
+        visible={addOpen}
+        onClose={() => setAddOpen(false)}
+        subtitle={[title, hasPlan ? meta.split(' · ').slice(1).join(' · ') : 'Off-plan'].filter(Boolean).join(' · ')}
+        onAdd={handleAddExercises}
+        excludeIds={trackings.map((t) => t.exerciseId)}
       />
-
-      {/* Add Exercise Modal */}
-      <AddExerciseModal
-        visible={addExerciseModalVisible}
-        onClose={() => {
-          setAddExerciseModalVisible(false);
-        }}
-        exercises={availableExercises}
-        onSelectExercises={handleSelectExercises}
-        onCreateExercise={handleCreateExercise}
-        creating={creatingExercise}
-      />
-
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
+  root: {
     flex: 1,
-    backgroundColor: '#1a1a1a',
+    backgroundColor: colors.bg,
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#1a1a1a',
+  content: {
+    paddingHorizontal: space.gutter,
+    gap: space.cardGap,
   },
-  errorText: {
-    color: '#ff4444',
-    fontSize: 16,
-    textAlign: 'center',
-    padding: 20,
-  },
-  header: {
-    borderBottomWidth: 1,
-    borderBottomColor: '#333',
-  },
-  headerDetails: {
-    alignItems: 'center',
-  },
-  headerRow: {
+  nav: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-    width: '100%',
-    paddingRight: 12,
+    gap: 12,
   },
-  mesocycleSubtitle: {
+  navTitles: {
     flex: 1,
-    fontSize: 17,
-    color: '#999',
-    marginRight: 8,
-    paddingLeft: 12,
+    gap: 2,
   },
-  mesocycleSubtitlePlaceholder: {
-    flex: 1,
-  },
-  headerChips: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    flexShrink: 0,
-  },
-  headerMetaChip: {
-    backgroundColor: '#2a2a2a',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  headerMetaChipText: {
-    fontSize: 13,
-    color: '#999',
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingVertical: 8,
-  },
-  emptyContainer: {
-    padding: 40,
-    alignItems: 'center',
-  },
-  emptyText: {
-    color: '#fff',
+  title: {
+    ...type.cardTitle,
     fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 8,
+    fontWeight: '700',
+    letterSpacing: -0.3,
+    color: colors.text.primary,
   },
-  emptySubtext: {
-    color: '#999',
-    fontSize: 14,
-    marginBottom: 24,
-    textAlign: 'center',
+  meta: {
+    ...type.metaSmall,
+    color: colors.text.muted,
   },
-  addExerciseEmptyButton: {
+  stripRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#4CAF50',
-    borderRadius: 8,
-    paddingVertical: 14,
-    paddingHorizontal: 24,
-    gap: 8,
+    gap: 12,
   },
-  addExerciseEmptyButtonDisabled: {
-    backgroundColor: '#333',
-    opacity: 0.5,
+  flex: {
+    flex: 1,
   },
-  addExerciseEmptyButtonText: {
-    color: '#fff',
-    fontSize: 16,
+  stripCount: {
+    ...type.meta,
+    color: colors.text.secondary,
+  },
+  stripDone: {
     fontWeight: '600',
+    color: colors.text.primary,
+  },
+  track: {
+    height: 6,
+    borderRadius: radius.cell,
+    backgroundColor: colors.border.track,
+    overflow: 'hidden',
+  },
+  fill: {
+    height: 6,
+    borderRadius: radius.cell,
+    backgroundColor: colors.success.base,
   },
   footer: {
-    padding: 16,
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingTop: 12,
+    paddingHorizontal: space.gutter,
+    backgroundColor: colors.bg,
     borderTopWidth: 1,
-    borderTopColor: '#333',
-    backgroundColor: '#1a1a1a',
-  },
-  completeWorkoutButton: {
-    backgroundColor: '#4CAF50',
-    borderRadius: 8,
-    padding: 16,
-    alignItems: 'center',
-  },
-  completeWorkoutButtonDisabled: {
-    backgroundColor: '#333',
-    opacity: 0.6,
-  },
-  completeWorkoutText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+    borderTopColor: colors.border.divider,
   },
 });
-

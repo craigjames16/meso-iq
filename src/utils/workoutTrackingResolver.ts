@@ -1,5 +1,4 @@
-import type { ExerciseTracking, ExerciseSet } from '../components/ExerciseTrackingCard';
-import type { HistoryInstance } from '../components/ExerciseHistoryModal';
+import type { ClientSetType, ExerciseTracking, ExerciseSet, HistoryInstance } from '../components/logger/types';
 
 /** Per-exercise data from GET /exercises/:id (normalized for UI). */
 export interface ExerciseDetailData {
@@ -10,8 +9,21 @@ export interface ExerciseDetailData {
     reps: number;
     weight: number;
     subSetNumber?: number | null;
-    setType?: 'REGULAR' | 'DROP_SET' | 'MYO_REP';
+    setType?: ClientSetType;
   }>;
+}
+
+/** Keeps each main set directly ahead of its attached sets, in set-number order. */
+function orderSets(sets: ExerciseSet[]): ExerciseSet[] {
+  return sets
+    .map((s, i) => ({ s, i }))
+    .sort(
+      (a, b) =>
+        (a.s.setNumber ?? 0) - (b.s.setNumber ?? 0) ||
+        (a.s.subSetNumber ?? 0) - (b.s.subSetNumber ?? 0) ||
+        a.i - b.i,
+    )
+    .map(({ s }) => s);
 }
 
 function mapApiSetToCompleted(set: any): ExerciseSet {
@@ -138,6 +150,7 @@ export function buildExerciseTrackingForWorkoutExercise(
   } else {
     sets = mergeIncompleteExerciseSets(nestedSets, lastSetsTemplate);
   }
+  sets = orderSets(sets);
 
   return {
     exerciseId,
