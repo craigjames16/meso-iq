@@ -16,6 +16,8 @@ import { EditPlanScreen } from '../screens/plan/EditPlanScreen';
 import { MesocycleDetailScreen } from '../screens/mesocycle/MesocycleDetailScreen';
 import { HeatmapScreen } from '../screens/main/HeatmapScreen';
 import { ExerciseDetailScreen } from '../screens/exercise/ExerciseDetailScreen';
+import { StyleGuideScreen } from '../screens/dev/StyleGuideScreen';
+import { colors } from '../theme';
 
 export type RootStackParamList = {
   Main: NavigatorScreenParams<MainTabParamList>;
@@ -27,6 +29,7 @@ export type RootStackParamList = {
   MesocycleDetail: { mesocycleId: number };
   Heatmap: { mesocycleId: number | null };
   ExerciseDetail: { exerciseId: number };
+  StyleGuide: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -37,7 +40,7 @@ export const AppNavigator: React.FC = () => {
   if (isHydrating) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
+        <ActivityIndicator size="large" color={colors.text.primary} />
       </View>
     );
   }
@@ -49,7 +52,7 @@ export const AppNavigator: React.FC = () => {
           screenOptions={{
             headerShown: false,
             headerBackButtonDisplayMode: 'minimal',
-            contentStyle: { backgroundColor: '#1a1a1a' },
+            contentStyle: { backgroundColor: colors.bg },
           }}
         >
           <Stack.Screen name="Main" component={MainNavigator} />
@@ -58,8 +61,8 @@ export const AppNavigator: React.FC = () => {
             component={WorkoutDetailScreen}
             options={{
               headerShown: true,
-              headerStyle: { backgroundColor: '#1a1a1a' },
-              headerTintColor: '#fff',
+              headerStyle: { backgroundColor: colors.bg },
+              headerTintColor: colors.text.primary,
               headerTitleStyle: { fontWeight: 'bold' },
               title: 'Workout', // fallback until screen sets Week X - Day Y
             }}
@@ -77,8 +80,8 @@ export const AppNavigator: React.FC = () => {
             component={AccountSettingsScreen}
             options={{
               headerShown: true,
-              headerStyle: { backgroundColor: '#1a1a1a' },
-              headerTintColor: '#fff',
+              headerStyle: { backgroundColor: colors.bg },
+              headerTintColor: colors.text.primary,
               headerTitleStyle: { fontWeight: 'bold' },
               title: 'Account Settings',
             }}
@@ -88,8 +91,8 @@ export const AppNavigator: React.FC = () => {
             component={PlanDetailScreen}
             options={{
               headerShown: true,
-              headerStyle: { backgroundColor: '#1a1a1a' },
-              headerTintColor: '#fff',
+              headerStyle: { backgroundColor: colors.bg },
+              headerTintColor: colors.text.primary,
               headerTitleStyle: { fontWeight: 'bold' },
               title: 'Plan Details',
             }}
@@ -99,8 +102,8 @@ export const AppNavigator: React.FC = () => {
             component={EditPlanScreen}
             options={{
               headerShown: true,
-              headerStyle: { backgroundColor: '#1a1a1a' },
-              headerTintColor: '#fff',
+              headerStyle: { backgroundColor: colors.bg },
+              headerTintColor: colors.text.primary,
               headerTitleStyle: { fontWeight: 'bold' },
               title: 'Edit Plan',
             }}
@@ -110,8 +113,8 @@ export const AppNavigator: React.FC = () => {
             component={MesocycleDetailScreen}
             options={{
               headerShown: true,
-              headerStyle: { backgroundColor: '#1a1a1a' },
-              headerTintColor: '#fff',
+              headerStyle: { backgroundColor: colors.bg },
+              headerTintColor: colors.text.primary,
               headerTitleStyle: { fontWeight: 'bold' },
               title: 'Mesocycle Details',
             }}
@@ -121,8 +124,8 @@ export const AppNavigator: React.FC = () => {
             component={HeatmapScreen}
             options={{
               headerShown: true,
-              headerStyle: { backgroundColor: '#1a1a1a' },
-              headerTintColor: '#fff',
+              headerStyle: { backgroundColor: colors.bg },
+              headerTintColor: colors.text.primary,
               headerTitleStyle: { fontWeight: 'bold' },
               title: 'Workout Heatmap',
             }}
@@ -132,12 +135,13 @@ export const AppNavigator: React.FC = () => {
             component={ExerciseDetailScreen}
             options={{
               headerShown: true,
-              headerStyle: { backgroundColor: '#1a1a1a' },
-              headerTintColor: '#fff',
+              headerStyle: { backgroundColor: colors.bg },
+              headerTintColor: colors.text.primary,
               headerTitleStyle: { fontWeight: 'bold' },
               title: 'Exercise Details',
             }}
           />
+          {__DEV__ ? <Stack.Screen name="StyleGuide" component={StyleGuideScreen} /> : null}
         </Stack.Navigator>
       ) : (
         <AuthNavigator />
@@ -151,7 +155,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#1a1a1a',
+    backgroundColor: colors.bg,
   },
 });
 

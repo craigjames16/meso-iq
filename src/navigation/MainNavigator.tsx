@@ -17,6 +17,7 @@ import {
 import type { RootStackParamList } from './AppNavigator';
 import { GlassTabBar } from '../components/GlassTabBar';
 import { themeColors, spacing } from '../theme/colors';
+import { colors } from '../theme';
 
 export type MainTabParamList = {
   Track: undefined;
@@ -39,7 +40,7 @@ const AccountHeaderButton: React.FC = () => {
       onPress={() => navigation.navigate('AccountSettings')}
       style={{ marginRight: 16 }}
     >
-      <MaterialIcons name="account-circle" size={28} color="#fff" />
+      <MaterialIcons name="account-circle" size={28} color={colors.text.primary} />
     </TouchableOpacity>
   );
 };
@@ -71,8 +72,8 @@ const CreateHeaderButton: React.FC = () => {
         gap: 6,
       }}
     >
-      <MaterialIcons name="add" size={20} color="#fff" />
-      <Text style={{ color: '#fff', fontSize: 15, fontWeight: '600' }}>
+      <MaterialIcons name="add" size={20} color={colors.text.primary} />
+      <Text style={{ color: colors.text.primary, fontSize: 15, fontWeight: '600' }}>
         {resourceName}
       </Text>
     </TouchableOpacity>
@@ -85,13 +86,13 @@ export const MainNavigator: React.FC = () => {
       tabBar={(props) => <GlassTabBar {...props} />}
       screenOptions={{
         headerShown: true,
-        headerStyle: { backgroundColor: '#1a1a1a' },
-        headerTintColor: '#fff',
+        headerStyle: { backgroundColor: colors.bg },
+        headerTintColor: colors.text.primary,
         headerTitleStyle: { fontWeight: 'bold' },
         headerRight: () => <AccountHeaderButton />,
-        tabBarStyle: { backgroundColor: '#1a1a1a', borderTopColor: '#333' },
-        tabBarActiveTintColor: '#fff',
-        tabBarInactiveTintColor: '#666',
+        tabBarStyle: { backgroundColor: colors.bg, borderTopColor: colors.border.card },
+        tabBarActiveTintColor: colors.action.fill,
+        tabBarInactiveTintColor: colors.text.secondary,
       }}
     >
       <Tab.Screen 

@@ -10,13 +10,15 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../../navigation/AppNavigator';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { useAuth } from '../../hooks/useAuth';
 import { themeColors, spacing, borderRadius } from '../../theme/colors';
 import { downloadSetsCsvExport } from '../../services/userDataExportService';
 
 export const AccountSettingsScreen: React.FC = () => {
-  const navigation = useNavigation();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { user, signOut, deleteAccount } = useAuth();
   const [dangerZoneOpen, setDangerZoneOpen] = useState(false);
   const [exportingData, setExportingData] = useState(false);
@@ -121,6 +123,16 @@ export const AccountSettingsScreen: React.FC = () => {
           <Text style={styles.infoValue}>{user?.email || 'N/A'}</Text>
         </View>
       </View>
+
+      {__DEV__ ? (
+        <TouchableOpacity
+          style={styles.dataRow}
+          onPress={() => navigation.navigate('StyleGuide')}
+          accessibilityRole="button"
+        >
+          <Text style={styles.dataRowLabel}>Style guide (development only)</Text>
+        </TouchableOpacity>
+      ) : null}
 
       <View style={[styles.section, styles.dataSection]}>
         <Text style={styles.sectionTitle}>Data</Text>

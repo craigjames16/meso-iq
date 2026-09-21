@@ -1,61 +1,52 @@
-// Theme colors matching the Next.js web app
-export const themeColors = {
-  // Primary colors
-  primary: {
-    main: 'rgb(45, 115, 212)',
-    //color rgb(13, 47, 94)
+// Legacy theme alias. Screens that haven't been rebuilt still import
+// `themeColors`, `spacing` and `borderRadius` from here. Each key maps onto the
+// new tokens in `./tokens`, so the old screens pick up the new palette.
+// Phase 8 deletes this file.
+import { colors, radius } from './tokens';
 
-    light: 'rgb(97, 162, 255)',
-    dark: 'rgb(43, 57, 79)',
+export const themeColors = {
+  primary: {
+    // Old screens pair primary.main with white text, so it maps to signal
+    // orange rather than action.fill to stay legible.
+    main: colors.data.main,
+    light: colors.data.main,
+    dark: colors.data.secondary,
   },
-  
-  // Accent colors
   accent: {
-    warning: '#ff7300',
-    success: '#10b981',
-    error: '#ef4444',
+    warning: colors.warning.base,
+    success: colors.success.base,
+    error: colors.danger.base,
   },
-  
-  // Text colors
   text: {
-    primary: 'rgba(255, 255, 255, 0.95)',
-    secondary: 'rgba(255, 255, 255, 0.7)',
-    muted: 'rgba(156, 163, 175, 0.9)',
-    disabled: 'rgba(255, 255, 255, 0.3)',
+    primary: colors.text.primary,
+    secondary: colors.text.secondary,
+    muted: colors.text.muted,
+    disabled: colors.text.disabled,
   },
-  
-  // Background colors
   background: {
-    primary: '#1a1a1a',
-    secondary: '#2a2a2a',
-    surface: 'rgba(255, 255, 255, 0.05)',
-    elevated: 'rgba(255, 255, 255, 0.08)',
+    primary: colors.bg,
+    secondary: colors.surface.card,
+    surface: colors.surface.card,
+    elevated: colors.surface.raised,
   },
-  
-  // Border colors
   border: {
-    default: 'rgba(255, 255, 255, 0.1)',
-    light: 'rgba(255, 255, 255, 0.15)',
-    focus: 'rgba(136, 132, 216, 0.5)',
+    default: colors.border.card,
+    light: colors.border.field,
+    focus: colors.action.fill,
   },
-  
-  // Overlay colors
   overlay: {
-    light: 'rgba(255, 255, 255, 0.05)',
-    medium: 'rgba(255, 255, 255, 0.1)',
-    strong: 'rgba(255, 255, 255, 0.15)',
+    light: colors.surface.raised,
+    medium: colors.surface.inset,
+    strong: colors.surface.field,
   },
-  
-  // Chart specific colors
   chart: {
-    volume: 'rgb(45, 115, 212)',
-    sets: '#8884d8',
-    gridLine: 'rgba(255, 255, 255, 0.2)',
-    axisLabel: 'rgba(255, 255, 255, 0.85)',
+    volume: colors.data.main,
+    sets: colors.data.secondary,
+    gridLine: colors.border.divider,
+    axisLabel: colors.text.faint,
   },
 } as const;
 
-// Chart constants
 export const chartColors = {
   volume: themeColors.chart.volume,
   sets: themeColors.chart.sets,
@@ -64,7 +55,6 @@ export const chartColors = {
   areaOpacity: 0.1,
 } as const;
 
-// Common style values
 export const spacing = {
   xs: 4,
   sm: 8,
@@ -74,9 +64,8 @@ export const spacing = {
 } as const;
 
 export const borderRadius = {
-  sm: 4,
-  md: 8,
-  lg: 12,
-  xl: 16,
+  sm: radius.tag,
+  md: radius.card,
+  lg: radius.sheet,
+  xl: radius.tabBar,
 } as const;
-

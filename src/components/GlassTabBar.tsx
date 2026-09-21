@@ -1,8 +1,10 @@
 import React from 'react';
-import { View, TouchableOpacity, Text, StyleSheet, Platform } from 'react-native';
-import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
-import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
+import { colors, glass, radius, shadow, type } from '../theme';
+import { DataTabGlyph, PlanTabGlyph, TrackTabGlyph } from './ui/glyphs';
 
 // Try to import LiquidGlassView with fallback
 let LiquidGlassView: React.ComponentType<any> | null = null;
@@ -17,25 +19,61 @@ try {
   console.warn('LiquidGlass module not available, using fallback:', error);
 }
 
-export const GlassTabBar: React.FC<BottomTabBarProps> = ({
-  state,
-  descriptors,
-  navigation,
-}) => {
+const BAR_GUTTER = 10;
+const BAR_BOTTOM = 14;
+const SHEEN_HEIGHT = 28;
+
+const TAB_GLYPHS: Record<string, React.FC<{ color?: string }>> = {
+  Track: TrackTabGlyph,
+  Data: DataTabGlyph,
+  Plan: PlanTabGlyph,
+};
+
+/** Space a scrolling tab screen needs under its content to clear the bar. */
+export const TAB_BAR_CLEARANCE = 92;
+
+const Rim: React.FC = () => (
+  <Svg style={StyleSheet.absoluteFill} width="100%" height="100%" pointerEvents="none">
+    <Defs>
+      {/* 155deg in CSS runs from top-left towards bottom-right. */}
+      <LinearGradient id="rim" x1="0.3" y1="0" x2="0.7" y2="1">
+        {glass.rimStops.map((s) => (
+          <Stop key={s.offset} offset={s.offset} stopColor={s.color} stopOpacity={s.opacity} />
+        ))}
+      </LinearGradient>
+    </Defs>
+    <Rect x={0} y={0} width="100%" height="100%" rx={radius.tabBar} fill="url(#rim)" />
+  </Svg>
+);
+
+const Sheen: React.FC = () => (
+  <Svg style={styles.sheen} width="100%" height={SHEEN_HEIGHT} pointerEvents="none">
+    <Defs>
+      <LinearGradient id="sheenFill" x1="0" y1="0" x2="0" y2="1">
+        <Stop offset={0} stopColor={colors.action.fill} stopOpacity={0.11} />
+        <Stop offset={1} stopColor={colors.action.fill} stopOpacity={0} />
+      </LinearGradient>
+    </Defs>
+    <Rect x={0} y={0} width="100%" height={SHEEN_HEIGHT} fill="url(#sheenFill)" />
+  </Svg>
+);
+
+export const GlassTabBar: React.FC<BottomTabBarProps> = ({ state, descriptors, navigation }) => {
   const insets = useSafeAreaInsets();
 
-  const tabBarContent = (
-    <View style={styles.tabBarContent}>
+  const items = (
+    <View style={styles.items}>
       {state.routes.map((route, index) => {
         const { options } = descriptors[route.key];
         const label =
           typeof options.tabBarLabel === 'string'
             ? options.tabBarLabel
             : options.title !== undefined
-            ? options.title
-            : route.name;
-
+              ? options.title
+              : route.name;
         const isFocused = state.index === index;
+        const Glyph = TAB_GLYPHS[route.name] ?? TrackTabGlyph;
+        const color = isFocused ? colors.action.onFill : colors.text.secondary;
 
         const onPress = () => {
           const event = navigation.emit({
@@ -43,140 +81,103 @@ export const GlassTabBar: React.FC<BottomTabBarProps> = ({
             target: route.key,
             canPreventDefault: true,
           });
-
           if (!isFocused && !event.defaultPrevented) {
             navigation.navigate(route.name);
           }
         };
 
         const onLongPress = () => {
-          navigation.emit({
-            type: 'tabLongPress',
-            target: route.key,
-          });
+          navigation.emit({ type: 'tabLongPress', target: route.key });
         };
 
-        const iconName = getIconName(route.name);
-        const color = isFocused ? '#fff' : '#666';
-
         return (
-          <TouchableOpacity
+          <Pressable
             key={route.key}
-            accessibilityRole="button"
+            accessibilityRole="tab"
             accessibilityState={isFocused ? { selected: true } : {}}
-            accessibilityLabel={options.tabBarAccessibilityLabel}
+            accessibilityLabel={options.tabBarAccessibilityLabel ?? label}
             onPress={onPress}
             onLongPress={onLongPress}
-            style={styles.tabButton}
+            style={[styles.item, isFocused && styles.itemActive]}
           >
-            <MaterialIcons
-              name={iconName}
-              size={24}
-              color={color}
-              style={styles.icon}
-            />
-            <Text
-              style={[
-                styles.label,
-                { color },
-                isFocused && styles.labelFocused,
-              ]}
-            >
-              {label}
-            </Text>
-          </TouchableOpacity>
+            <Glyph color={color} />
+            <Text style={[styles.label, { color }, !isFocused && styles.labelIdle]}>{label}</Text>
+          </Pressable>
         );
       })}
     </View>
   );
 
-  const tabBarStyle = [
-    styles.tabBar,
-    {
-      marginBottom: Math.max(insets.bottom, 0),
-    },
-  ];
+  const useGlass = LiquidGlassView && isLiquidGlassSupported;
+  const Inner = useGlass ? LiquidGlassView! : View;
 
-  // Use LiquidGlassView if available and supported, otherwise use regular View with blur effect
-  if (LiquidGlassView && isLiquidGlassSupported) {
-    return (
-      <LiquidGlassView style={tabBarStyle} effect="regular">
-        {tabBarContent}
-      </LiquidGlassView>
-    );
-  }
-
-  // Fallback: Use regular View with semi-transparent background and blur-like styling
   return (
-    <View style={[tabBarStyle, styles.fallbackTabBar]}>
-      {tabBarContent}
+    <View style={[styles.outer, { bottom: BAR_BOTTOM + insets.bottom }]} pointerEvents="box-none">
+      <Rim />
+      <Inner style={[styles.inner, !useGlass && styles.innerFallback]} {...(useGlass ? { effect: 'regular' } : {})}>
+        <Sheen />
+        <View style={styles.highlight} pointerEvents="none" />
+        {items}
+      </Inner>
     </View>
   );
 };
 
-const getIconName = (routeName: string): string => {
-  switch (routeName) {
-    case 'Track':
-      return 'fitness-center';
-    case 'Data':
-      return 'bar-chart';
-    case 'Plan':
-      return 'calendar-today';
-    default:
-      return 'circle';
-  }
-};
-
 const styles = StyleSheet.create({
-  tabBar: {
-    marginHorizontal: 16,
-    marginBottom: 8,
+  outer: {
     position: 'absolute',
-    bottom: 10,
-    left: 0,
-    width: "92%",
+    left: BAR_GUTTER,
+    right: BAR_GUTTER,
+    borderRadius: radius.tabBar,
+    padding: 1,
     zIndex: 99,
-    borderRadius: 9999, // 100% border radius for pill shape
-    // overflow: 'hidden',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: -4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 12,
-      },
-      android: {
-        elevation: 12,
-      },
-    }),
+    ...shadow.tabBar,
   },
-  fallbackTabBar: {
-    // backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    backgroundColor: 'red',
+  inner: {
+    borderRadius: radius.tabBarInner,
+    overflow: 'hidden',
   },
-  tabBarContent: {
+  innerFallback: {
+    backgroundColor: glass.fill,
+  },
+  sheen: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+  },
+  highlight: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    height: 1,
+    backgroundColor: glass.innerHighlight,
+  },
+  items: {
     flexDirection: 'row',
-    height: 60,
     alignItems: 'center',
     justifyContent: 'space-around',
+    paddingTop: 8,
+    paddingBottom: 9,
     paddingHorizontal: 8,
   },
-  tabButton: {
-    flex: 1,
+  item: {
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: 7,
+    paddingHorizontal: 22,
+    borderRadius: radius.tabItem,
+    minHeight: 44,
   },
-  icon: {
-    marginBottom: 4,
+  itemActive: {
+    backgroundColor: colors.action.fill,
+    ...shadow.tabItem,
   },
   label: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#666',
+    ...type.tabLabel,
   },
-  labelFocused: {
-    fontWeight: '600',
-    color: '#fff',
+  labelIdle: {
+    fontWeight: '400',
   },
 });
-
