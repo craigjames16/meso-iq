@@ -68,17 +68,7 @@ export const AppNavigator: React.FC = () => {
             }}
           />
           <Stack.Screen name="PastSession" component={PastSessionScreen} />
-          <Stack.Screen 
-            name="AccountSettings" 
-            component={AccountSettingsScreen}
-            options={{
-              headerShown: true,
-              headerStyle: { backgroundColor: colors.bg },
-              headerTintColor: colors.text.primary,
-              headerTitleStyle: { fontWeight: 'bold' },
-              title: 'Account Settings',
-            }}
-          />
+          <Stack.Screen name="AccountSettings" component={AccountSettingsScreen} />
           <Stack.Screen name="PlanDetail" component={PlanDetailScreen} />
           <Stack.Screen name="EditPlan" component={EditPlanScreen} />
           <Stack.Screen name="MesocycleDetail" component={MesocycleDetailScreen} />
