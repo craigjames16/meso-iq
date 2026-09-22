@@ -3,10 +3,34 @@
 
 type Listener = () => void;
 
+// Every cache, so a change of signed-in user can empty them all at once.
+const registry = new Set<ResourceCache<unknown>>();
+
+/**
+ * Empties every cache without notifying listeners. Call when the signed-in
+ * user changes; the screens that listened belong to the previous user's tree
+ * and are about to unmount.
+ */
+export function resetAllCaches(): void {
+  registry.forEach((c) => c.reset());
+}
+
 export class ResourceCache<T> {
   private values = new Map<string, T>();
   private inflight = new Map<string, Promise<T>>();
   private listeners = new Set<Listener>();
+  /** Bumped by reset() so requests started before it can't write back. */
+  private generation = 0;
+
+  constructor() {
+    registry.add(this as ResourceCache<unknown>);
+  }
+
+  reset(): void {
+    this.generation += 1;
+    this.values.clear();
+    this.inflight.clear();
+  }
 
   get(key: string): T | undefined {
     return this.values.get(key);
@@ -37,13 +61,15 @@ export class ResourceCache<T> {
     if (!force && this.values.has(key)) return Promise.resolve(this.values.get(key) as T);
     const pending = this.inflight.get(key);
     if (pending && !force) return pending;
+    const generation = this.generation;
     const p = loader()
       .then((value) => {
-        this.set(key, value);
+        // A response for the previous user must not land in the new user's cache.
+        if (generation === this.generation) this.set(key, value);
         return value;
       })
       .finally(() => {
-        this.inflight.delete(key);
+        if (generation === this.generation) this.inflight.delete(key);
       });
     this.inflight.set(key, p);
     return p;
