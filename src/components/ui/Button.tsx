@@ -43,6 +43,7 @@ export const Button: React.FC<ButtonProps> = ({
       onPress={onPress}
       disabled={inactive}
       accessibilityRole="button"
+      accessibilityLabel={label}
       accessibilityState={{ disabled: !!inactive, busy: !!loading }}
       accessibilityHint={accessibilityHint}
       style={({ pressed }) => [

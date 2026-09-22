@@ -1,7 +1,7 @@
 import { act } from 'react-test-renderer';
 import { DataScreen } from '../main/DataScreen';
 import { HeatmapScreen } from '../main/HeatmapScreen';
-import { press, renderScreen, textOf } from '../../testing/render';
+import { press, renderScreen, textOf, unlabelledPressables } from '../../testing/render';
 
 jest.mock('../../services/workoutService', () => ({
   workoutService: {
@@ -41,6 +41,7 @@ describe('Data tab', () => {
     expect(text).toContain('Cable Flyes');
     expect(text).toContain('Epley estimate from the heaviest working set each session.');
     expect(text).not.toMatch(/NaN|undefined/);
+    expect(unlabelledPressables(r.root)).toEqual([]);
     await act(async () => r.unmount());
   });
 
@@ -62,6 +63,7 @@ describe('Data tab', () => {
     expect(text).toContain('100%');
     expect(text).toContain('Est. 1RM change per week · last 6 months');
     expect(text).not.toMatch(/NaN|undefined/);
+    expect(unlabelledPressables(r.root)).toEqual([]);
     await act(async () => r.unmount());
   });
 
@@ -78,6 +80,7 @@ describe('Data tab', () => {
     expect(text).toContain('ALL TIME');
     expect(text).toContain('Exercises used');
     expect(text).not.toMatch(/NaN|undefined/);
+    expect(unlabelledPressables(r.root)).toEqual([]);
     await act(async () => r.unmount());
   });
 });
@@ -90,6 +93,7 @@ describe('Consistency screen', () => {
     expect(text).toContain('Current streak');
     expect(text).toContain('Big day');
     expect(text).toContain("Shade is that day's hard sets. Tap a day to open the session.");
+    expect(unlabelledPressables(r.root)).toEqual([]);
     await act(async () => r.unmount());
   });
 });

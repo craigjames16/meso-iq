@@ -27,7 +27,7 @@ import {
   TrendGlyph,
   WarningGlyph,
 } from '../../components/ui';
-import { colors, muscleLabel, muscleShort, radius, type } from '../../theme';
+import { colors, muscleLabel, muscleShort, radius, type, size } from '../../theme';
 import { formatNumber, formatPercentDelta } from '../../utils/format';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -279,7 +279,7 @@ const styles = StyleSheet.create({
   },
   heroMeta: {
     ...type.meta,
-    fontSize: 13,
+    fontSize: size.control,
     color: colors.text.secondary,
   },
   weeks: {
@@ -312,7 +312,7 @@ const styles = StyleSheet.create({
   tickKey: {
     width: 2,
     height: 12,
-    borderRadius: 1,
+    borderRadius: radius.hairline,
     backgroundColor: colors.data.reference,
   },
   captionText: {

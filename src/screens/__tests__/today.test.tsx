@@ -1,6 +1,6 @@
 import { act } from 'react-test-renderer';
 import { TrackScreen } from '../main/TrackScreen';
-import { press, pressText, renderScreen, textOf } from '../../testing/render';
+import { press, pressText, renderScreen, textOf, unlabelledPressables } from '../../testing/render';
 import { meso, pushSession, upcomingPush } from '../../testing/fixtures';
 import { workoutService } from '../../services/workoutService';
 import { plansService } from '../../services/plansService';
@@ -56,6 +56,7 @@ describe('Today', () => {
     expect(text).toContain('Day 3 · Push');
     expect(text).toContain('1 WK');
     expect(text).not.toMatch(/min|timer|duration/i);
+    expect(unlabelledPressables(r.root)).toEqual([]);
     await act(async () => r.unmount());
   });
 
@@ -69,6 +70,7 @@ describe('Today', () => {
     expect(text).not.toContain('Recent');
     expect(text).not.toContain('This week');
     expect(text).toContain('Log something off-plan');
+    expect(unlabelledPressables(r.root)).toEqual([]);
     await act(async () => r.unmount());
   });
 });
@@ -92,6 +94,7 @@ describe('Today variants', () => {
     const text = textOf(r.root);
     expect(text).toContain('Legs');
     expect(text).toContain('Resume · 1 set logged');
+    expect(unlabelledPressables(r.root)).toEqual([]);
     await act(async () => r.unmount());
   });
 
@@ -101,6 +104,7 @@ describe('Today variants', () => {
     const r = await render();
     expect(textOf(r.root)).toContain('No cycle running');
     expect(textOf(r.root)).toContain('Start a cycle');
+    expect(unlabelledPressables(r.root)).toEqual([]);
     await act(async () => r.unmount());
   });
 });
@@ -118,6 +122,7 @@ describe('Off-plan sheet', () => {
     await press(r.root.findAll((n) => typeof n.props.onPress === 'function' && textOf(n).trim() === 'Start workout').pop()!);
     expect(ws.createStandaloneWorkout).toHaveBeenCalledWith('Push');
     expect(ws.addExercise).toHaveBeenCalledWith(900, [10]);
+    expect(unlabelledPressables(r.root)).toEqual([]);
     await act(async () => r.unmount());
   });
 });

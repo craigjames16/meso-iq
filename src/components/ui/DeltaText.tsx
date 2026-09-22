@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleSheet, Text, type StyleProp, type TextStyle } from 'react-native';
-import { colors, tabularNums, type } from '../../theme';
+import { colors, tabularNums, type, size } from '../../theme';
 import { FLAT_DELTA, formatPercentDelta } from '../../utils/format';
 
 interface DeltaTextProps {
@@ -33,7 +33,7 @@ export const DeltaText: React.FC<DeltaTextProps> = ({ value, digits = 1, style, 
 const styles = StyleSheet.create({
   text: {
     ...type.metaSmall,
-    fontSize: 12,
+    fontSize: size.metaMid,
     fontWeight: '600',
     ...tabularNums,
   },

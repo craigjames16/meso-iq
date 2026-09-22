@@ -20,6 +20,7 @@ export function Segmented<T extends string>({ options, value, onChange, size = '
             onPress={() => onChange(option.value)}
             accessibilityRole="tab"
             accessibilityState={{ selected }}
+            hitSlop={size === 'small' ? 8 : 5}
             style={[styles.item, size === 'small' && styles.itemSmall, selected && styles.itemSelected]}
           >
             <Text style={[styles.label, selected && styles.labelSelected]} numberOfLines={1}>

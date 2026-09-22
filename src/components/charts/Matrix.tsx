@@ -64,7 +64,7 @@ const styles = StyleSheet.create({
   },
   cell: {
     flex: 1,
-    height: 26,
+    minHeight: 26,
     borderRadius: radius.bar,
     alignItems: 'center',
     justifyContent: 'center',

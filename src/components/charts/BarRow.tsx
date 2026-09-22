@@ -1,6 +1,6 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors, radius, tabularNums, type } from '../../theme';
+import { colors, radius, tabularNums, type, size } from '../../theme';
 
 interface BarRowProps {
   label: string;
@@ -124,7 +124,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: 2,
     marginLeft: -1,
-    borderRadius: 1,
+    borderRadius: radius.hairline,
     backgroundColor: colors.data.reference,
   },
   right: {
@@ -136,12 +136,12 @@ const styles = StyleSheet.create({
   },
   value: {
     ...type.value,
-    fontSize: 14,
+    fontSize: size.body,
     ...tabularNums,
   },
   delta: {
     ...type.caption,
-    fontSize: 11,
+    fontSize: size.label,
     fontWeight: '600',
     ...tabularNums,
   },

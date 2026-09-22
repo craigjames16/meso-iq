@@ -37,7 +37,7 @@ import { TodayHero, type TodayHeroProps } from '../../components/track/TodayHero
 import { ThisWeek, type WeekCell } from '../../components/track/ThisWeek';
 import { OffPlanSheet } from '../../components/track/OffPlanSheet';
 import { SessionRow } from '../../components/session/SessionRow';
-import { colors, muscleLabel, radius, type } from '../../theme';
+import { colors, muscleLabel, radius, type, size } from '../../theme';
 import { calendarDaysBetween, formatDaysAgo, formatLongDay, formatNumber, formatWeight } from '../../utils/format';
 import { workoutDisplayName } from '../../utils/names';
 
@@ -358,13 +358,13 @@ const styles = StyleSheet.create({
   },
   hitName: {
     ...type.metaSmall,
-    fontSize: 12,
+    fontSize: size.metaMid,
     fontWeight: '600',
     color: colors.text.body,
   },
   hitSince: {
     ...type.metaSmall,
-    fontSize: 11,
+    fontSize: size.label,
     color: colors.text.muted,
   },
 });

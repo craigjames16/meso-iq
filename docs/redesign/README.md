@@ -11,6 +11,8 @@ The design source is the [MesoIQ Redesign canvas](https://claude.ai/artifact/8v8
 - **[`02-analytics.md`](02-analytics.md)**: every derived metric, with its formula, function signature, data source and required tests.
 - **[`03-screens.md`](03-screens.md)**: one entry per screen, with target file, layout, data, states, interactions and acceptance criteria.
 - **[`04-backend.md`](04-backend.md)**: API contract changes, and which client features each one gates.
+- **[`baseline.md`](baseline.md)**: check results and API shapes recorded before the redesign.
+- **[`implementation-notes.md`](implementation-notes.md)**: how the build departs from the spec, what stays gated, and how it was verified.
 
 ## Design principles
 

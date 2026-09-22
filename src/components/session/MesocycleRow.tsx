@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { DeltaText, ListRow, Tag } from '../ui';
-import { colors, type } from '../../theme';
+import { colors, type, size } from '../../theme';
 import { formatMonthDay, formatPercent } from '../../utils/format';
 import type { MesocycleSummary } from '../../hooks/useMesocycleSummaries';
 
@@ -51,7 +51,7 @@ const styles = StyleSheet.create({
   },
   label: {
     ...type.caption,
-    fontSize: 10,
+    fontSize: size.tag,
     color: colors.text.faint,
   },
 });

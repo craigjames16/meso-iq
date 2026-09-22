@@ -4,7 +4,7 @@ import { PlanDetailScreen } from '../plan/PlanDetailScreen';
 import { EditPlanScreen } from '../plan/EditPlanScreen';
 import { MesocycleDetailScreen } from '../mesocycle/MesocycleDetailScreen';
 import { ExerciseDetailScreen } from '../exercise/ExerciseDetailScreen';
-import { press, pressText, renderScreen, textOf } from '../../testing/render';
+import { press, pressText, renderScreen, textOf, unlabelledPressables } from '../../testing/render';
 import { plansService } from '../../services/plansService';
 
 jest.mock('../../services/workoutService', () => ({
@@ -49,6 +49,7 @@ describe('Plan tab', () => {
     expect(text).toContain('1 empty draft');
     expect(text).toContain('“Chest/Arms”');
     expect(text).not.toMatch(/NaN|undefined/);
+    expect(unlabelledPressables(r.root)).toEqual([]);
     await act(async () => r.unmount());
   });
 
@@ -60,6 +61,7 @@ describe('Plan tab', () => {
     expect(text).toContain('Chest & Triceps');
     expect(text).toContain('Days 2 & 3 Rest');
     expect(text).toContain('Finish Meso 3 first.');
+    expect(unlabelledPressables(r.root)).toEqual([]);
     await act(async () => r.unmount());
   });
 
@@ -80,6 +82,7 @@ describe('Plan tab', () => {
         { isRestDay: false, workoutExercises: [{ id: 20, order: 1 }] },
       ],
     });
+    expect(unlabelledPressables(r.root)).toEqual([]);
     await act(async () => r.unmount());
   });
 
@@ -88,6 +91,7 @@ describe('Plan tab', () => {
     expect(textOf(r.root)).toContain('New program');
     await pressText(r.root, 'Save program');
     expect(plansService.createPlan).not.toHaveBeenCalled();
+    expect(unlabelledPressables(r.root)).toEqual([]);
     await act(async () => r.unmount());
   });
 });
@@ -102,6 +106,7 @@ describe('Mesocycle and exercise detail', () => {
     expect(text).toContain('WEEK BY WEEK');
     expect(text).toContain('RIR 3');
     expect(text).toContain('Finish cycle early');
+    expect(unlabelledPressables(r.root)).toEqual([]);
     await act(async () => r.unmount());
   });
 
@@ -118,6 +123,7 @@ describe('Mesocycle and exercise detail', () => {
     await press(vol);
     text = textOf(r.root);
     expect(text).not.toMatch(/NaN|undefined/);
+    expect(unlabelledPressables(r.root)).toEqual([]);
     await act(async () => r.unmount());
   });
 });

@@ -34,7 +34,7 @@ import {
   deltaColor,
 } from '../../components/ui';
 import { planContext, sessionName } from '../../components/session/sessionText';
-import { colors, radius, space, type } from '../../theme';
+import { colors, radius, space, type, size } from '../../theme';
 import { formatNumber, formatPercentDelta, formatSigned, formatWeight } from '../../utils/format';
 import { workoutDisplayName } from '../../utils/names';
 
@@ -265,7 +265,7 @@ const styles = StyleSheet.create({
   },
   cycleCount: {
     ...type.metaSmall,
-    fontSize: 12,
+    fontSize: size.metaMid,
     color: colors.text.secondary,
   },
   segments: {

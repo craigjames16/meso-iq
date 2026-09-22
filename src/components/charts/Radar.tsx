@@ -1,7 +1,7 @@
 import React from 'react';
 import { View } from 'react-native';
 import Svg, { Circle, Line, Polygon, Text as SvgText } from 'react-native-svg';
-import { colors } from '../../theme';
+import { colors, size } from '../../theme';
 import { useWidth } from './useWidth';
 
 interface RadarProps {
@@ -57,7 +57,7 @@ export const Radar: React.FC<RadarProps> = ({ axes, current, previous, height = 
                 y={y + dy}
                 textAnchor={anchor}
                 fill={colors.text.secondary}
-                fontSize={10.5}
+                fontSize={size.caption}
                 fontWeight="600"
                 letterSpacing={0.5}
               >

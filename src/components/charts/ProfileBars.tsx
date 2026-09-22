@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { colors, tabularNums, type } from '../../theme';
+import { colors, tabularNums, type, size } from '../../theme';
 
 interface ProfileBarsProps {
   bars: { label: string; value: number; warn?: boolean }[];
@@ -59,7 +59,7 @@ const styles = StyleSheet.create({
   },
   label: {
     ...type.tagSmall,
-    fontSize: 8.5,
+    fontSize: size.micro,
     fontWeight: '400',
     letterSpacing: 0.3,
     color: colors.text.muted,

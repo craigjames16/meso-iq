@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { View } from 'react-native';
 import Svg, { Circle, Line, Polyline, Text as SvgText } from 'react-native-svg';
-import { colors } from '../../theme';
+import { colors, size } from '../../theme';
 import { niceTicks, useWidth } from './useWidth';
 
 export interface LinePoint {
@@ -69,7 +69,7 @@ export const LineChart: React.FC<LineChartProps> = ({
                 stroke={i === 0 ? colors.border.dividerAlt : colors.border.divider}
                 strokeWidth={1}
               />
-              <SvgText x={PAD_LEFT - 6} y={geo.sy(t) + 3} textAnchor="end" fill={colors.text.faint} fontSize={9.5}>
+              <SvgText x={PAD_LEFT - 6} y={geo.sy(t) + 3} textAnchor="end" fill={colors.text.faint} fontSize={size.tagSmall}>
                 {formatY(t)}
               </SvgText>
             </React.Fragment>
@@ -114,7 +114,7 @@ export const LineChart: React.FC<LineChartProps> = ({
             const x = geo.sx(l.x.getTime());
             const anchor = i === 0 && arr.length > 1 ? 'start' : i === arr.length - 1 && arr.length > 1 ? 'end' : 'middle';
             return (
-              <SvgText key={`${l.label}-${i}`} x={x} y={height - 8} textAnchor={anchor} fill={colors.text.faint} fontSize={9.5}>
+              <SvgText key={`${l.label}-${i}`} x={x} y={height - 8} textAnchor={anchor} fill={colors.text.faint} fontSize={size.tagSmall}>
                 {l.label}
               </SvgText>
             );

@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Card, CardTitle } from '../ui';
-import { colors, glass, radius, tabularNums, type } from '../../theme';
+import { colors, glass, radius, tabularNums, type, size } from '../../theme';
 
 export interface WeekCell {
   dayNumber: number;
@@ -40,7 +40,7 @@ export const ThisWeek: React.FC<{ cells: WeekCell[]; done: number; total: number
 const styles = StyleSheet.create({
   count: {
     ...type.metaSmall,
-    fontSize: 12,
+    fontSize: size.metaMid,
     color: colors.text.muted,
   },
   row: {
@@ -59,7 +59,8 @@ const styles = StyleSheet.create({
   },
   cell: {
     alignSelf: 'stretch',
-    height: 54,
+    minHeight: 54,
+    paddingVertical: 4,
     borderRadius: radius.field,
     borderWidth: 1,
     alignItems: 'center',
@@ -95,7 +96,7 @@ const styles = StyleSheet.create({
     ...tabularNums,
   },
   bottom: {
-    fontSize: 9,
+    fontSize: size.tiny,
   },
 });
 

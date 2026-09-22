@@ -15,7 +15,7 @@ import { Button, Card, DeltaText, IconButton, PlusGlyph, Screen, ScreenHeader, S
 import { NewProgramSheet } from '../../components/plan/NewProgramSheet';
 import { ProgramsTab } from '../plan/ProgramsTab';
 import { ExercisesTab } from '../plan/ExercisesTab';
-import { colors, type } from '../../theme';
+import { colors, type, size } from '../../theme';
 import { formatPercent } from '../../utils/format';
 
 type Nav = CompositeNavigationProp<BottomTabNavigationProp<MainTabParamList, 'Plan'>, NativeStackNavigationProp<RootStackParamList>>;
@@ -141,17 +141,17 @@ const styles = StyleSheet.create({
   },
   label: {
     ...type.label,
-    fontSize: 10.5,
+    fontSize: size.caption,
     color: colors.text.secondary,
   },
   week: {
     ...type.metaSmall,
-    fontSize: 12,
+    fontSize: size.metaMid,
     color: colors.text.muted,
   },
   title: {
     ...type.cardTitle,
-    fontSize: 18,
+    fontSize: size.heading,
     color: colors.text.primary,
   },
   meta: {
@@ -159,7 +159,7 @@ const styles = StyleSheet.create({
     color: colors.text.muted,
   },
   inlineDelta: {
-    fontSize: 12.5,
+    fontSize: size.meta,
   },
   actions: {
     flexDirection: 'row',

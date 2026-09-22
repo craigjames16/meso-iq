@@ -10,7 +10,7 @@ import { ProfileBars } from '../../components/charts';
 import { Card, ChevronGlyph, DeltaText, EmptyState, ErrorState, ListRow, Skeleton, Tag } from '../../components/ui';
 import { isEmptyPlan, planCounts, planDayName, sortedDays } from '../../components/plan/planText';
 import { features } from '../../config/features';
-import { colors, muscleShort, radius, type } from '../../theme';
+import { colors, muscleShort, radius, type, size } from '../../theme';
 import type { Plan } from '../../types/plan';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -132,7 +132,7 @@ const styles = StyleSheet.create({
   },
   name: {
     ...type.cardTitle,
-    fontSize: 16,
+    fontSize: size.title,
     color: colors.text.primary,
     flexShrink: 1,
   },

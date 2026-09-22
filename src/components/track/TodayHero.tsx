@@ -1,7 +1,7 @@
 import React from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, PlayGlyph, TrendGlyph } from '../ui';
-import { colors, radius, shadow, type } from '../../theme';
+import { colors, radius, shadow, type, size } from '../../theme';
 
 export type TodayHeroProps =
   | {
@@ -118,7 +118,7 @@ const styles = StyleSheet.create({
   },
   label: {
     ...type.label,
-    fontSize: 10.5,
+    fontSize: size.caption,
     color: colors.text.secondary,
   },
   title: {

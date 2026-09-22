@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, Text, View, type DimensionValue, type StyleProp, type ViewStyle } from 'react-native';
-import { colors, radius, type } from '../../theme';
+import { colors, radius, type, size } from '../../theme';
 import { Button } from './Button';
 import { Card } from './Card';
 
@@ -80,7 +80,7 @@ const styles = StyleSheet.create({
   },
   message: {
     ...type.body,
-    fontSize: 13.5,
+    fontSize: size.strong,
     color: colors.text.secondary,
   },
   notEnough: {

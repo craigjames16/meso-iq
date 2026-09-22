@@ -1,6 +1,6 @@
 import { act } from 'react-test-renderer';
 import { WorkoutDetailScreen } from '../workout/WorkoutDetailScreen';
-import { byLabel, flush, press, pressText, renderScreen, textOf } from '../../testing/render';
+import { byLabel, flush, press, pressText, renderScreen, textOf, unlabelledPressables } from '../../testing/render';
 import { workoutService } from '../../services/workoutService';
 
 jest.mock('../../services/workoutService', () => {
@@ -113,6 +113,7 @@ describe('Workout logger', () => {
     expect(moved).toEqual(expect.arrayContaining([[2, null], [2, 1], [2, 2]]));
     expect(textOf(r.root)).toContain('Finish workout · 2 of 3 sets');
 
+    expect(unlabelledPressables(r.root)).toEqual([]);
     await act(async () => r.unmount());
     await flush(1);
   });

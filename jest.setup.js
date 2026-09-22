@@ -21,9 +21,3 @@ jest.mock('react-native-safe-area-context', () => {
   };
 });
 
-// Removed in Phase 8; the old data cards still import it.
-jest.mock('@wuba/react-native-echarts', () => ({
-  SvgChart: require('react-native').View,
-  SkiaChart: require('react-native').View,
-  SVGRenderer: function SVGRenderer() {},
-}));

@@ -1,7 +1,7 @@
 import { act } from 'react-test-renderer';
 import { WorkoutCompleteScreen } from '../workout/WorkoutCompleteScreen';
 import { PastSessionScreen } from '../workout/PastSessionScreen';
-import { renderScreen, textOf } from '../../testing/render';
+import { renderScreen, textOf, unlabelledPressables } from '../../testing/render';
 import { daysAgo, pushExercises } from '../../testing/fixtures';
 
 const mockNestedInstance = {
@@ -77,6 +77,7 @@ describe('Workout complete', () => {
     expect(text).toContain('Est. 1RM 70 lb · +7 lb');
     expect(text).toContain('Top set 50 × 12');
     expect(text).toContain('THIS CYCLE');
+    expect(unlabelledPressables(r.root)).toEqual([]);
     await act(async () => r.unmount());
   });
 });
@@ -94,6 +95,7 @@ describe('Past session', () => {
     expect(text).toContain('40 × 8');
     // Read-only: no checkboxes.
     expect(r.root.findAll((n) => n.props.accessibilityRole === 'checkbox')).toHaveLength(0);
+    expect(unlabelledPressables(r.root)).toEqual([]);
     await act(async () => r.unmount());
   });
 });

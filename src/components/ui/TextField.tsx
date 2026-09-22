@@ -1,6 +1,6 @@
 import React, { forwardRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native';
-import { colors, radius, type } from '../../theme';
+import { colors, radius, type, size } from '../../theme';
 
 interface TextFieldProps extends Omit<TextInputProps, 'style'> {
   label?: string;
@@ -67,7 +67,7 @@ const styles = StyleSheet.create({
   },
   label: {
     ...type.label,
-    fontSize: 10.5,
+    fontSize: size.caption,
     color: colors.text.muted,
   },
   field: {
@@ -96,7 +96,7 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     ...type.body,
-    fontSize: 15,
+    fontSize: size.input,
     color: colors.text.primary,
     paddingVertical: 13,
   },

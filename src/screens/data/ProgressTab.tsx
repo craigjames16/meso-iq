@@ -23,7 +23,7 @@ import {
   Skeleton,
   deltaColor,
 } from '../../components/ui';
-import { colors, muscleLabel, type } from '../../theme';
+import { colors, muscleLabel, type, size } from '../../theme';
 import { formatNumber, formatPercent, formatPercentDelta, formatSigned, formatWeight, monthLong } from '../../utils/format';
 
 interface ProgressTabProps {
@@ -212,12 +212,12 @@ const styles = StyleSheet.create({
   },
   exercise: {
     ...type.cardTitle,
-    fontSize: 16,
+    fontSize: size.title,
     color: colors.text.primary,
   },
   meta: {
     ...type.metaSmall,
-    fontSize: 12,
+    fontSize: size.metaMid,
     color: colors.text.muted,
   },
   heroRow: {
@@ -228,7 +228,7 @@ const styles = StyleSheet.create({
   },
   hero: {
     ...type.hero,
-    fontSize: 34,
+    fontSize: size.heroLarge,
     color: colors.text.primary,
   },
   unit: {

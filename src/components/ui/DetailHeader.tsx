@@ -1,6 +1,6 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors, hitSlop, type } from '../../theme';
+import { colors, hitSlop, type, size } from '../../theme';
 import { ChevronGlyph } from './glyphs';
 
 interface DetailHeaderProps {
@@ -86,7 +86,7 @@ const styles = StyleSheet.create({
   },
   action: {
     ...type.buttonSmall,
-    fontSize: 14,
+    fontSize: size.body,
     color: colors.text.body,
   },
   actionDisabled: {

@@ -70,7 +70,7 @@ export const authService = {
       // Call signout endpoint if available
       try {
         await apiClient.post(endpoints.AUTH.SIGNOUT);
-      } catch (error) {
+      } catch {
         // Endpoint might not exist, continue with local cleanup
         console.warn('Signout endpoint not available, clearing local storage only');
       }
@@ -115,7 +115,7 @@ export const authService = {
       }
 
       return null;
-    } catch (error) {
+    } catch {
       // If API fails, check local storage
       const token = await storage.getToken();
       const user = await storage.getUser();
@@ -135,7 +135,7 @@ export const authService = {
     try {
       const session = await this.getSession();
       return !!session;
-    } catch (error) {
+    } catch {
       return false;
     }
   },

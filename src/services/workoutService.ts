@@ -1,7 +1,7 @@
 import { apiClient } from '../api/client';
 import { endpoints } from '../api/endpoints';
 import type { ClientSetType } from '../components/logger/types';
-import { CurrentMesocycle, ScheduleData, WorkoutInstance, LatestWorkoutResponse, HistoryData, UpcomingData } from '../types/workout';
+import { CurrentMesocycle, WorkoutInstance, LatestWorkoutResponse, HistoryData, UpcomingData } from '../types/workout';
 
 export const workoutService = {
   async getMesocycles(): Promise<CurrentMesocycle[]> {

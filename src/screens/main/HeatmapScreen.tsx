@@ -9,7 +9,7 @@ import { useTrainingHistory } from '../../hooks/useTrainingHistory';
 import { HeatGrid } from '../../components/charts';
 import { Card, Chip, DetailHeader, ErrorState, Screen, Sheet, Skeleton, StatRow, StatTile } from '../../components/ui';
 import { SessionRow } from '../../components/session/SessionRow';
-import { colors, radius, type } from '../../theme';
+import { colors, radius, type, size } from '../../theme';
 import { formatFullDate, formatPercent, monthShort } from '../../utils/format';
 
 type Route = RouteProp<RootStackParamList, 'Heatmap'>;
@@ -136,7 +136,7 @@ const styles = StyleSheet.create({
   },
   monthLabel: {
     ...type.label,
-    fontSize: 10.5,
+    fontSize: size.caption,
     letterSpacing: 0.8,
     color: colors.text.body,
   },

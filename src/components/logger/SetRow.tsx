@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { colors, radius, tabularNums, type } from '../../theme';
+import { colors, radius, tabularNums, type, size } from '../../theme';
 import { CheckGlyph, MoreGlyph } from '../ui/glyphs';
 import type { AttachedSetType } from './types';
 
@@ -214,8 +214,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   badge: {
-    width: 26,
-    height: 26,
+    minWidth: 26,
+    minHeight: 26,
+    paddingHorizontal: 2,
     borderRadius: radius.badge,
     borderWidth: 1,
     alignItems: 'center',
@@ -244,7 +245,7 @@ const styles = StyleSheet.create({
   times: {
     width: 10,
     textAlign: 'center',
-    fontSize: 11,
+    fontSize: size.label,
     color: colors.text.disabled,
   },
   timesDone: {

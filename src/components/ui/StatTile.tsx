@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { colors, radius, tabularNums, type } from '../../theme';
+import { colors, radius, tabularNums, type, size } from '../../theme';
 import { DeltaText } from './DeltaText';
 import { NOT_ENOUGH_COPY } from './States';
 
@@ -81,7 +81,7 @@ const styles = StyleSheet.create({
   },
   label: {
     ...type.metaSmall,
-    fontSize: 11,
+    fontSize: size.label,
     color: colors.text.muted,
   },
   valueRow: {
@@ -91,7 +91,7 @@ const styles = StyleSheet.create({
   },
   value: {
     ...type.stat,
-    fontSize: 19,
+    fontSize: size.stat,
     fontWeight: '600',
     color: colors.text.primary,
     flexShrink: 1,
@@ -102,7 +102,7 @@ const styles = StyleSheet.create({
   },
   meta: {
     ...type.caption,
-    fontSize: 11,
+    fontSize: size.label,
     color: colors.text.faint,
     ...tabularNums,
   },

@@ -82,6 +82,7 @@ export const glass = {
 } as const;
 
 export const radius = {
+  hairline: 1, // tick marks
   cell: 2, // heat cells, bar caps
   bar: 3, // bar fills
   tag: 4, // tags, pills

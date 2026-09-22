@@ -84,3 +84,19 @@ export async function pressText(root: ReactTestInstance, text: string): Promise<
   if (matches.length === 0) throw new Error(`No pressable with text "${text}"`);
   await press(matches[matches.length - 1]);
 }
+
+/**
+ * Every pressable either shows text or carries an accessibility label, so
+ * icon-only controls are announced. Returns the offenders' types for a readable failure.
+ */
+export function unlabelledPressables(root: ReactTestInstance): string[] {
+  return root
+    .findAll((n) => typeof n.props.onPress === 'function' && typeof n.type !== 'string')
+    .filter((n) => {
+      if (n.props.accessibilityLabel || n.props.accessibilityElementsHidden) return false;
+      if (n.findAll((c) => c !== n && !!c.props.accessibilityLabel).length > 0) return false;
+      const own = n.findAll((c) => typeof c.props.children === 'string' || typeof c.props.children === 'number');
+      return textOf(n).trim() === '' && own.length === 0;
+    })
+    .map((n) => (typeof n.type === 'function' ? n.type.name || 'anonymous' : String(n.type)));
+}

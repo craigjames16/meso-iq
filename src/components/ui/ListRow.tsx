@@ -114,7 +114,7 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
   },
   delta: {
-    width: 52,
+    minWidth: 52,
     alignItems: 'flex-end',
   },
   divider: {

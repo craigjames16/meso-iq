@@ -1,6 +1,6 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors, radius, type } from '../../theme';
+import { colors, radius, type, size } from '../../theme';
 import { CheckCircleGlyph } from './glyphs';
 
 interface MenuActionProps {
@@ -110,7 +110,7 @@ const styles = StyleSheet.create({
   },
   meta: {
     ...type.metaSmall,
-    fontSize: 11,
+    fontSize: size.label,
     color: colors.text.muted,
   },
   pressed: {

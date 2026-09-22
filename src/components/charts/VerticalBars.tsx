@@ -1,7 +1,7 @@
 import React from 'react';
 import { View } from 'react-native';
 import Svg, { Line, Polyline, Rect, Text as SvgText } from 'react-native-svg';
-import { colors, radius } from '../../theme';
+import { colors, radius, size } from '../../theme';
 import { niceTicks, useWidth } from './useWidth';
 
 export interface VerticalBar {
@@ -72,7 +72,7 @@ export const VerticalBars: React.FC<VerticalBarsProps> = ({
                 stroke={i === 0 ? colors.border.dividerAlt : colors.surface.inset}
                 strokeWidth={1}
               />
-              <SvgText x={PAD_LEFT - 12} y={sy(t) + 3} textAnchor="end" fill={colors.text.faint} fontSize={9}>
+              <SvgText x={PAD_LEFT - 12} y={sy(t) + 3} textAnchor="end" fill={colors.text.faint} fontSize={size.tiny}>
                 {formatY(t)}
               </SvgText>
             </React.Fragment>
@@ -106,12 +106,12 @@ export const VerticalBars: React.FC<VerticalBarsProps> = ({
                   />
                 )}
                 {b.showLabel !== false ? (
-                  <SvgText x={cx(i)} y={height - 20} textAnchor="middle" fill={colors.text.faint} fontSize={9.5}>
+                  <SvgText x={cx(i)} y={height - 20} textAnchor="middle" fill={colors.text.faint} fontSize={size.tagSmall}>
                     {b.label}
                   </SvgText>
                 ) : null}
                 {b.partial ? (
-                  <SvgText x={cx(i)} y={height - 6} textAnchor="middle" fill={colors.text.faint} fontSize={8.5}>
+                  <SvgText x={cx(i)} y={height - 6} textAnchor="middle" fill={colors.text.faint} fontSize={size.micro}>
                     so far
                   </SvgText>
                 ) : null}

@@ -13,7 +13,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, glass, radius, space, type } from '../../theme';
+import { colors, glass, radius, space, type, size } from '../../theme';
 import { IconButton } from './IconButton';
 import { CloseGlyph } from './glyphs';
 
@@ -184,7 +184,7 @@ const styles = StyleSheet.create({
   handle: {
     width: 38,
     height: 4,
-    borderRadius: 2,
+    borderRadius: radius.cell,
     backgroundColor: colors.border.strong,
   },
   titleRow: {
@@ -202,7 +202,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     ...type.meta,
-    fontSize: 12,
+    fontSize: size.metaMid,
     color: colors.text.muted,
   },
   close: {

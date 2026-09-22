@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { colors, radius, tabularNums, type } from '../../theme';
+import { colors, radius, tabularNums, type, size } from '../../theme';
 import type { SetRecord } from '../../analytics';
 import { badgeLabel } from '../logger/setOps';
 import type { AttachedSetType, ClientSetType } from '../logger/types';
@@ -73,8 +73,9 @@ const styles = StyleSheet.create({
     marginLeft: 16,
   },
   badge: {
-    width: 22,
-    height: 22,
+    minWidth: 22,
+    minHeight: 22,
+    paddingHorizontal: 2,
     borderRadius: radius.badge,
     borderWidth: 1,
     backgroundColor: colors.success.badgeBg,
@@ -90,7 +91,7 @@ const styles = StyleSheet.create({
   value: {
     flex: 1,
     ...type.setField,
-    fontSize: 14.5,
+    fontSize: size.field,
     color: colors.success.fieldText,
   },
   valueHighlight: {

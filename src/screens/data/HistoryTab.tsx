@@ -11,7 +11,7 @@ import { HeatGrid, LineKey, VerticalBars } from '../../components/charts';
 import { Button, Card, CardTitle, EmptyState, ErrorState, SectionLabel, Skeleton, StatRow, StatTile, Tag } from '../../components/ui';
 import { SessionRow } from '../../components/session/SessionRow';
 import { MesocycleRow } from '../../components/session/MesocycleRow';
-import { colors, type } from '../../theme';
+import { colors, type, size } from '../../theme';
 import { formatCompact, formatNumber, formatPercent, monthShort } from '../../utils/format';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -177,7 +177,7 @@ const styles = StyleSheet.create({
   },
   monthLabel: {
     ...type.caption,
-    fontSize: 11,
+    fontSize: size.label,
     color: colors.text.faint,
   },
   statsRow: {
@@ -195,13 +195,13 @@ const styles = StyleSheet.create({
   },
   statValue: {
     ...type.stat,
-    fontSize: 19,
+    fontSize: size.stat,
     fontWeight: '600',
     color: colors.text.primary,
   },
   statLabel: {
     ...type.metaSmall,
-    fontSize: 11,
+    fontSize: size.label,
     color: colors.text.muted,
   },
   empty: {

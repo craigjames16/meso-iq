@@ -5,6 +5,33 @@ import type { TextStyle } from 'react-native';
 
 const tabular: TextStyle['fontVariant'] = ['tabular-nums'];
 
+/** The type scale in points. Components use these names, never raw sizes. */
+export const size = {
+  micro: 8.5,
+  tiny: 9,
+  tagSmall: 9.5,
+  tag: 10,
+  caption: 10.5,
+  label: 11,
+  metaSmall: 11.5,
+  metaMid: 12,
+  meta: 12.5,
+  control: 13,
+  strong: 13.5,
+  body: 14,
+  field: 14.5,
+  input: 15,
+  title: 16,
+  sheet: 17,
+  heading: 18,
+  stat: 19,
+  statLarge: 20,
+  detail: 27,
+  tab: 30,
+  hero: 32,
+  heroLarge: 34,
+} as const;
+
 export const type = {
   tabTitle: { fontSize: 30, fontWeight: '700', letterSpacing: -0.6 },
   detailTitle: { fontSize: 27, fontWeight: '700', letterSpacing: -0.4 },

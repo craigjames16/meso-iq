@@ -2,7 +2,7 @@ import { act } from 'react-test-renderer';
 import { SignInScreen } from '../auth/SignInScreen';
 import { SignUpScreen } from '../auth/SignUpScreen';
 import { AccountSettingsScreen } from '../main/AccountSettingsScreen';
-import { pressText, renderScreen, textOf } from '../../testing/render';
+import { pressText, renderScreen, textOf, unlabelledPressables } from '../../testing/render';
 
 const mockSignIn = jest.fn(async () => {
   throw new Error('Invalid email or password');
@@ -33,6 +33,7 @@ describe('Auth and account', () => {
     await pressText(r.root, 'Sign in');
     expect(mockSignIn).toHaveBeenCalledWith({ email: 'craig@example.com', password: 'secret' });
     expect(textOf(r.root)).toContain('Invalid email or password');
+    expect(unlabelledPressables(r.root)).toEqual([]);
     await act(async () => r.unmount());
   });
 
@@ -43,6 +44,7 @@ describe('Auth and account', () => {
     await pressText(r.root, 'Create account');
     expect(textOf(r.root)).toContain('Use at least 8 characters.');
     expect(mockSignUp).not.toHaveBeenCalled();
+    expect(unlabelledPressables(r.root)).toEqual([]);
     await act(async () => r.unmount());
   });
 
@@ -54,6 +56,7 @@ describe('Auth and account', () => {
     expect(text).toContain('Download my data');
     expect(text).toContain('Delete account');
     expect(text).toMatch(/MesoIQ 0\.0\.1/);
+    expect(unlabelledPressables(r.root)).toEqual([]);
     await act(async () => r.unmount());
   });
 });

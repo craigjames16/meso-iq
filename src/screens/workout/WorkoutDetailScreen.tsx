@@ -38,7 +38,7 @@ import {
   Skeleton,
   Tag,
 } from '../../components/ui';
-import { colors, radius, space, type } from '../../theme';
+import { colors, radius, space, type, size } from '../../theme';
 import { invalidateExerciseHistory } from '../../hooks/exerciseSessions';
 import { invalidateMesocycles } from '../../hooks/mesocycleData';
 import { workoutDisplayName } from '../../utils/names';
@@ -569,7 +569,7 @@ const styles = StyleSheet.create({
   },
   title: {
     ...type.cardTitle,
-    fontSize: 18,
+    fontSize: size.heading,
     fontWeight: '700',
     letterSpacing: -0.3,
     color: colors.text.primary,
