@@ -1,6 +1,10 @@
 export interface WorkoutExercise {
   id: number;
   order: number;
+  /** Rep range and week-1 sets. Null until the API ships them (PROGRAM_TARGETS). */
+  repMin?: number | null;
+  repMax?: number | null;
+  startingSets?: number | null;
   exercise: {
     id: number;
     name: string;
@@ -37,6 +41,20 @@ export interface MesocycleListItem {
     id: number;
     name: string;
   };
+}
+
+export interface PlanDayInput {
+  /** Sent only with DAY_NAMES on. */
+  name?: string;
+  isRestDay: boolean;
+  workoutExercises: Array<{
+    id: number;
+    order: number;
+    /** Sent only with PROGRAM_TARGETS on. */
+    repMin?: number | null;
+    repMax?: number | null;
+    startingSets?: number | null;
+  }>;
 }
 
 export interface ExerciseListItem {

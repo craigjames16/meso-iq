@@ -143,3 +143,21 @@ export function cableFlyesDetail(weeks = 8) {
     })),
   };
 }
+
+export const pplPlan = {
+  id: 4,
+  name: 'PPL',
+  days: [
+    { id: 41, dayNumber: 1, isRestDay: false, workout: { id: 7, name: 'PPL - Day 1', workoutExercises: pushExercises.map((we) => ({ id: we.id, order: we.order, exercise: we.exercise })) } },
+    { id: 42, dayNumber: 2, isRestDay: true },
+    { id: 43, dayNumber: 3, isRestDay: true },
+    {
+      id: 44,
+      dayNumber: 4,
+      isRestDay: false,
+      workout: { id: 8, name: 'Pull', workoutExercises: [{ id: 201, order: 0, exercise: { id: 20, name: 'Pull-ups', category: 'BACK' } }] },
+    },
+  ],
+};
+
+export const emptyPlan = { id: 5, name: 'Chest/Arms', days: [] };

@@ -2,7 +2,7 @@
 // src/analytics that imports from src/types or src/services.
 import type { WorkoutInstance } from '../types/workout';
 import type { ExerciseDetailResponse } from '../services/exercisesService';
-import type { ExercisesByCategory, MesocycleDetail } from '../types/plan';
+import type { ExercisesByCategory, MesocycleDetail, Plan } from '../types/plan';
 import { ALL_MUSCLES } from './types';
 import type {
   ExerciseSession,
@@ -180,4 +180,16 @@ export function mesocycleDetailInput(detail: MesocycleDetail): MesocycleDetailIn
       })),
     })),
   };
+}
+
+/** A program's training days as volume-profile input. */
+export function programDaysFromPlan(plan: Pick<Plan, 'days'>): { exercises: { muscle: Muscle | undefined; startingSets?: number | null }[] }[] {
+  return (plan.days ?? [])
+    .filter((d) => !d.isRestDay)
+    .map((d) => ({
+      exercises: (d.workout?.workoutExercises ?? []).map((we) => ({
+        muscle: toMuscle(we.exercise?.category),
+        startingSets: we.startingSets ?? null,
+      })),
+    }));
 }

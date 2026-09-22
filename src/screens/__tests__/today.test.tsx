@@ -1,7 +1,7 @@
 import { act } from 'react-test-renderer';
 import { TrackScreen } from '../main/TrackScreen';
 import { press, pressText, renderScreen, textOf } from '../../testing/render';
-import { meso, mesoDetail, pushSession, upcomingPush } from '../../testing/fixtures';
+import { meso, pushSession, upcomingPush } from '../../testing/fixtures';
 import { workoutService } from '../../services/workoutService';
 import { plansService } from '../../services/plansService';
 
@@ -122,5 +122,3 @@ describe('Off-plan sheet', () => {
   });
 });
 
-// Keep the fixture import used so the mock factory can require it.
-void mesoDetail;

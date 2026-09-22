@@ -1,4 +1,5 @@
 import type { ClientSetType, ExerciseTracking, ExerciseSet, HistoryInstance } from '../components/logger/types';
+import { features } from '../config/features';
 
 /** Per-exercise data from GET /exercises/:id (normalized for UI). */
 export interface ExerciseDetailData {
@@ -45,19 +46,33 @@ function defaultTwoSets(): ExerciseSet[] {
   ];
 }
 
+/** Blank rows for an exercise with no history: the plan's startingSets with PROGRAM_TARGETS on, else two. */
+function startingRows(startingSets?: number | null): ExerciseSet[] {
+  if (!features.PROGRAM_TARGETS || !startingSets || startingSets < 1) return defaultTwoSets();
+  return Array.from({ length: startingSets }, (_, i) => ({
+    reps: 0,
+    weight: 0,
+    setNumber: i + 1,
+    subSetNumber: null,
+    setType: 'REGULAR' as const,
+    completed: false,
+  }));
+}
+
 /**
  * Merge completed sets from the current workout instance with the template from last history.
  */
 function mergeIncompleteExerciseSets(
   nestedSets: any[],
-  historyTemplate: ExerciseDetailData['lastSets']
+  historyTemplate: ExerciseDetailData['lastSets'],
+  startingSets?: number | null
 ): ExerciseSet[] {
   const nested = nestedSets.map(mapApiSetToCompleted);
   const usedIds = new Set<number>();
 
   if (!historyTemplate || historyTemplate.length === 0) {
     if (nested.length === 0) {
-      return defaultTwoSets();
+      return startingRows(startingSets);
     }
     return nested.map((s) => ({ ...s, completed: true }));
   }
@@ -148,7 +163,7 @@ export function buildExerciseTrackingForWorkoutExercise(
       completed: true,
     }));
   } else {
-    sets = mergeIncompleteExerciseSets(nestedSets, lastSetsTemplate);
+    sets = mergeIncompleteExerciseSets(nestedSets, lastSetsTemplate, workoutExercise.startingSets);
   }
   sets = orderSets(sets);
 

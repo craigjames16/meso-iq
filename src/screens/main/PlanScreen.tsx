@@ -1,135 +1,172 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { View, StyleSheet } from 'react-native';
-import { SegmentedControl } from '../../components/data';
-import {
-  PlansSection,
-  PlansSectionRef,
-  MesocyclesSection,
-  MesocyclesSectionRef,
-  ExercisesSection,
-  ExercisesSectionRef,
-} from '../../components/plan';
-import { themeColors, spacing } from '../../theme/colors';
+import React, { useState } from 'react';
+import { Alert, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { useNavigation, type CompositeNavigationProp } from '@react-navigation/native';
+import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { MainTabParamList } from '../../navigation/MainNavigator';
+import type { RootStackParamList } from '../../navigation/AppNavigator';
+import { mesocyclesService } from '../../services/mesocyclesService';
+import { useMesocycleSummaries } from '../../hooks/useMesocycleSummaries';
+import { usePlans } from '../../hooks/usePlans';
+import { useExerciseLibrary } from '../../hooks/useExerciseLibrary';
+import { useCycleStats } from '../../hooks/useCycleStats';
+import { invalidateMesocycles } from '../../hooks/mesocycleData';
+import { Button, Card, DeltaText, IconButton, PlusGlyph, Screen, ScreenHeader, Segmented } from '../../components/ui';
+import { NewProgramSheet } from '../../components/plan/NewProgramSheet';
+import { ProgramsTab } from '../plan/ProgramsTab';
+import { ExercisesTab } from '../plan/ExercisesTab';
+import { colors, type } from '../../theme';
+import { formatPercent } from '../../utils/format';
 
-type PlanTab = 'plans' | 'mesocycles' | 'exercises';
+type Nav = CompositeNavigationProp<BottomTabNavigationProp<MainTabParamList, 'Plan'>, NativeStackNavigationProp<RootStackParamList>>;
+type PlanTab = 'programs' | 'exercises';
 
-// Module-level state for header button access
-type PlanScreenRefs = {
-  plansSectionRef: React.RefObject<PlansSectionRef> | null;
-  mesocyclesSectionRef: React.RefObject<MesocyclesSectionRef> | null;
-  exercisesSectionRef: React.RefObject<ExercisesSectionRef> | null;
-};
-
-type PlanScreenState = {
-  activeTab: PlanTab;
-  refs: PlanScreenRefs;
-};
-
-let planScreenState: PlanScreenState = {
-  activeTab: 'plans',
-  refs: {
-    plansSectionRef: null,
-    mesocyclesSectionRef: null,
-    exercisesSectionRef: null,
-  },
-};
-
-let stateUpdateListeners: Set<() => void> = new Set();
-
-export const subscribeToPlanScreenState = (callback: () => void) => {
-  stateUpdateListeners.add(callback);
-  return () => {
-    stateUpdateListeners.delete(callback);
-  };
-};
-
-export const getPlanScreenState = () => planScreenState;
-
-export const handlePlanScreenCreateAction = () => {
-  const state = getPlanScreenState();
-  switch (state.activeTab) {
-    case 'plans':
-      state.refs.plansSectionRef?.current?.openCreateDialog();
-      break;
-    case 'mesocycles':
-      state.refs.mesocyclesSectionRef?.current?.openCreateDialog();
-      break;
-    case 'exercises':
-      state.refs.exercisesSectionRef?.current?.openCreateDialog();
-      break;
-  }
-};
-
-export const getPlanScreenResourceName = () => {
-  const state = getPlanScreenState();
-  switch (state.activeTab) {
-    case 'plans':
-      return 'Plan';
-    case 'mesocycles':
-      return 'Mesocycle';
-    case 'exercises':
-      return 'Exercise';
-    default:
-      return '';
-  }
-};
-
-const updatePlanScreenState = (updates: Partial<PlanScreenState>) => {
-  planScreenState = { ...planScreenState, ...updates };
-  stateUpdateListeners.forEach((listener) => listener());
-};
+let lastTab: PlanTab = 'programs';
 
 export const PlanScreen: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<PlanTab>('plans');
-  const plansSectionRef = useRef<PlansSectionRef>(null);
-  const mesocyclesSectionRef = useRef<MesocyclesSectionRef>(null);
-  const exercisesSectionRef = useRef<ExercisesSectionRef>(null);
+  const navigation = useNavigation<Nav>();
+  const [tab, setTabState] = useState<PlanTab>(lastTab);
+  const [newOpen, setNewOpen] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [ending, setEnding] = useState(false);
+  const mesos = useMesocycleSummaries();
+  const plans = usePlans();
+  const library = useExerciseLibrary();
+  const active = mesos.data.find((m) => m.status === 'IN_PROGRESS') ?? null;
+  const cycle = useCycleStats(active?.id ?? null);
 
-  // Update module-level state when component state or refs change
-  useEffect(() => {
-    updatePlanScreenState({
-      activeTab,
-      refs: {
-        plansSectionRef: plansSectionRef as React.RefObject<PlansSectionRef> | null,
-        mesocyclesSectionRef: mesocyclesSectionRef as React.RefObject<MesocyclesSectionRef> | null,
-        exercisesSectionRef: exercisesSectionRef as React.RefObject<ExercisesSectionRef> | null,
+  const setTab = (t: PlanTab) => {
+    lastTab = t;
+    setTabState(t);
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await Promise.all([mesos.refresh(), plans.refresh(), library.refresh()]);
+    setRefreshing(false);
+  };
+
+  const endEarly = () => {
+    if (!active) return;
+    Alert.alert(`End ${active.name} early?`, 'The cycle is marked complete. Logged sessions stay in your history.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'End cycle',
+        style: 'destructive',
+        onPress: async () => {
+          setEnding(true);
+          try {
+            await mesocyclesService.completeMesocycle(active.id);
+            invalidateMesocycles();
+          } catch (err) {
+            Alert.alert("Couldn't end the cycle", err instanceof Error ? err.message : 'Try again.');
+          } finally {
+            setEnding(false);
+          }
+        },
       },
-    });
-  }, [activeTab]);
-
-  const tabs = [
-    { label: 'Plans', value: 'plans' },
-    { label: 'Mesocycles', value: 'mesocycles' },
-    { label: 'Exercises', value: 'exercises' },
-  ];
+    ]);
+  };
 
   return (
-    <View style={styles.container}>
-      {/* Tab Switcher */}
-      <View style={styles.tabContainer}>
-        <SegmentedControl
-          segments={tabs}
-          value={activeTab}
-          onChange={(value) => setActiveTab(value as PlanTab)}
-        />
-      </View>
+    <Screen refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.text.secondary} />}>
+      <ScreenHeader
+        title="Plan"
+        right={<IconButton icon={<PlusGlyph color={colors.text.body} />} onPress={() => setNewOpen(true)} accessibilityLabel="New program" size={34} />}
+      />
 
-      {/* Tab Content */}
-      {activeTab === 'plans' && <PlansSection ref={plansSectionRef} />}
-      {activeTab === 'mesocycles' && <MesocyclesSection ref={mesocyclesSectionRef} />}
-      {activeTab === 'exercises' && <ExercisesSection ref={exercisesSectionRef} />}
-    </View>
+      {active ? (
+        <Card variant="hero" gap={10}>
+          <View style={styles.cycleHead}>
+            <Text style={styles.label}>ACTIVE CYCLE</Text>
+            <Text style={styles.week}>
+              Week {cycle.data.currentWeek} of {active.iterations}
+            </Text>
+          </View>
+          <Text style={styles.title}>
+            {active.name}
+            {active.planName ? ` · ${active.planName}` : ''}
+          </Text>
+          <Text style={styles.meta}>
+            {active.daysLogged} of {active.daysTotal} days logged
+            {active.adherence != null ? ` · ${formatPercent(active.adherence)} adherence` : ''}
+            {active.avgE1rm != null ? ' · ' : ''}
+            {active.avgE1rm != null ? <DeltaText value={active.avgE1rm} suffix="est. 1RM so far" style={styles.inlineDelta} /> : null}
+          </Text>
+          <View style={styles.actions}>
+            <Button
+              label="Adjust cycle"
+              variant="secondary"
+              size="small"
+              onPress={() => navigation.navigate('MesocycleDetail', { mesocycleId: active.id })}
+              style={styles.flex}
+            />
+            <Button label="End early" variant="secondary" size="small" onPress={endEarly} loading={ending} style={styles.flex} />
+          </View>
+        </Card>
+      ) : null}
+
+      <Segmented
+        options={[
+          { value: 'programs', label: 'Programs' },
+          { value: 'exercises', label: 'Exercises' },
+        ]}
+        value={tab}
+        onChange={setTab}
+      />
+
+      {tab === 'programs' ? <ProgramsTab mesocycles={mesos.data} onNewProgram={() => setNewOpen(true)} /> : <ExercisesTab />}
+
+      <NewProgramSheet
+        visible={newOpen}
+        onClose={() => setNewOpen(false)}
+        onBuild={() => {
+          setNewOpen(false);
+          navigation.navigate('EditPlan', {});
+        }}
+        onDrafted={(planId) => {
+          setNewOpen(false);
+          navigation.navigate('EditPlan', { planId, draftFromAI: true });
+        }}
+      />
+    </Screen>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: themeColors.background.primary,
+  cycleHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  tabContainer: {
-    padding: spacing.sm,
-    paddingBottom: spacing.sm,
+  label: {
+    ...type.label,
+    fontSize: 10.5,
+    color: colors.text.secondary,
+  },
+  week: {
+    ...type.metaSmall,
+    fontSize: 12,
+    color: colors.text.muted,
+  },
+  title: {
+    ...type.cardTitle,
+    fontSize: 18,
+    color: colors.text.primary,
+  },
+  meta: {
+    ...type.meta,
+    color: colors.text.muted,
+  },
+  inlineDelta: {
+    fontSize: 12.5,
+  },
+  actions: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 4,
+  },
+  flex: {
+    flex: 1,
   },
 });
-

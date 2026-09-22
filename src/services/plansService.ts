@@ -1,6 +1,6 @@
 import { apiClient } from '../api/client';
 import { API_ENDPOINTS } from '../config/env';
-import { Plan } from '../types/plan';
+import { Plan, PlanDayInput } from '../types/plan';
 
 export const plansService = {
   async getPlans(): Promise<Plan[]> {
@@ -29,7 +29,7 @@ export const plansService = {
     }
   },
 
-  async createPlan(data: { name: string; days: any[] }): Promise<Plan> {
+  async createPlan(data: { name: string; days: PlanDayInput[] }): Promise<Plan> {
     try {
       const response = await apiClient.post<{ plan: Plan } | Plan>(API_ENDPOINTS.PLANS.LIST, data);
       // Handle both wrapped { plan } response and direct Plan response
@@ -53,7 +53,7 @@ export const plansService = {
     }
   },
 
-  async updatePlan(id: number, data: { name: string; days: Array<{ isRestDay: boolean; workoutExercises: Array<{ id: number; order: number }> }> }): Promise<Plan> {
+  async updatePlan(id: number, data: { name: string; days: PlanDayInput[] }): Promise<Plan> {
     try {
       const response = await apiClient.put<Plan>(API_ENDPOINTS.PLANS.GET(id), data);
       return response;

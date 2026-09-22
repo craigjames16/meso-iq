@@ -2,7 +2,7 @@ import { act } from 'react-test-renderer';
 import { WorkoutCompleteScreen } from '../workout/WorkoutCompleteScreen';
 import { PastSessionScreen } from '../workout/PastSessionScreen';
 import { renderScreen, textOf } from '../../testing/render';
-import { daysAgo, mesoDetail, pushExercises } from '../../testing/fixtures';
+import { daysAgo, pushExercises } from '../../testing/fixtures';
 
 const mockNestedInstance = {
   id: 600,
@@ -98,4 +98,3 @@ describe('Past session', () => {
   });
 });
 
-void mesoDetail;

@@ -27,7 +27,7 @@ export type RootStackParamList = {
   PastSession: { workoutInstanceId: number };
   AccountSettings: undefined;
   PlanDetail: { planId: number };
-  EditPlan: { planId: number };
+  EditPlan: { planId?: number; draftFromAI?: boolean };
   MesocycleDetail: { mesocycleId: number };
   Heatmap: { year: number };
   ExerciseDetail: { exerciseId: number };
@@ -79,51 +79,11 @@ export const AppNavigator: React.FC = () => {
               title: 'Account Settings',
             }}
           />
-          <Stack.Screen 
-            name="PlanDetail" 
-            component={PlanDetailScreen}
-            options={{
-              headerShown: true,
-              headerStyle: { backgroundColor: colors.bg },
-              headerTintColor: colors.text.primary,
-              headerTitleStyle: { fontWeight: 'bold' },
-              title: 'Plan Details',
-            }}
-          />
-          <Stack.Screen 
-            name="EditPlan" 
-            component={EditPlanScreen}
-            options={{
-              headerShown: true,
-              headerStyle: { backgroundColor: colors.bg },
-              headerTintColor: colors.text.primary,
-              headerTitleStyle: { fontWeight: 'bold' },
-              title: 'Edit Plan',
-            }}
-          />
-          <Stack.Screen 
-            name="MesocycleDetail" 
-            component={MesocycleDetailScreen}
-            options={{
-              headerShown: true,
-              headerStyle: { backgroundColor: colors.bg },
-              headerTintColor: colors.text.primary,
-              headerTitleStyle: { fontWeight: 'bold' },
-              title: 'Mesocycle Details',
-            }}
-          />
-<Stack.Screen name="Heatmap" component={HeatmapScreen} />
-          <Stack.Screen 
-            name="ExerciseDetail" 
-            component={ExerciseDetailScreen}
-            options={{
-              headerShown: true,
-              headerStyle: { backgroundColor: colors.bg },
-              headerTintColor: colors.text.primary,
-              headerTitleStyle: { fontWeight: 'bold' },
-              title: 'Exercise Details',
-            }}
-          />
+          <Stack.Screen name="PlanDetail" component={PlanDetailScreen} />
+          <Stack.Screen name="EditPlan" component={EditPlanScreen} />
+          <Stack.Screen name="MesocycleDetail" component={MesocycleDetailScreen} />
+          <Stack.Screen name="Heatmap" component={HeatmapScreen} />
+          <Stack.Screen name="ExerciseDetail" component={ExerciseDetailScreen} />
           {__DEV__ ? <Stack.Screen name="StyleGuide" component={StyleGuideScreen} /> : null}
         </Stack.Navigator>
       ) : (
