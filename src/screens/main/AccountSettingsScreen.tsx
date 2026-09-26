@@ -1,64 +1,39 @@
-import React, { useState, useLayoutEffect, useCallback } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Alert,
-  Share,
-  ActivityIndicator,
-} from 'react-native';
+import React, { useState } from 'react';
+import { Alert, Share, StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../../navigation/AppNavigator';
 import { useAuth } from '../../hooks/useAuth';
-import { themeColors, spacing, borderRadius } from '../../theme/colors';
 import { downloadSetsCsvExport } from '../../services/userDataExportService';
+import { Card, DetailHeader, MenuAction, MenuGroup, Screen, SectionLabel } from '../../components/ui';
+import { colors, radius, type } from '../../theme';
+import packageJson from '../../../package.json';
+
+type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 export const AccountSettingsScreen: React.FC = () => {
-  const navigation = useNavigation();
+  const navigation = useNavigation<Nav>();
   const { user, signOut, deleteAccount } = useAuth();
-  const [dangerZoneOpen, setDangerZoneOpen] = useState(false);
-  const [exportingData, setExportingData] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const email = user?.email ?? '';
 
-  const handleSignOut = useCallback(() => {
-    Alert.alert(
-      'Sign Out',
-      'Are you sure you want to sign out?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Sign Out',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await signOut();
-            } catch (error) {
-              Alert.alert('Error', 'Failed to sign out');
-            }
-          },
+  const handleSignOut = () =>
+    Alert.alert('Sign out?', "You'll need your email and password to sign back in.", [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Sign out',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await signOut();
+          } catch {
+            Alert.alert("Couldn't sign out", 'Try again.');
+          }
         },
-      ]
-    );
-  }, [signOut]);
+      },
+    ]);
 
-  useLayoutEffect(() => {
-    navigation.setOptions({
-      headerRight: () => (
-        <TouchableOpacity
-          onPress={handleSignOut}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 4 }}
-          accessibilityRole="button"
-          accessibilityLabel="Sign out"
-          style={styles.headerSignOut}
-        >
-          <Text style={styles.headerSignOutText}>Sign out</Text>
-        </TouchableOpacity>
-      ),
-    });
-  }, [navigation, handleSignOut]);
-
-  const handleDeleteAccount = () => {
+  const handleDeleteAccount = () =>
     Alert.alert(
       'Delete account',
       'This will permanently disable your account. Your workout data will be kept for 90 days, after which it will be deleted. You will not be able to sign in again. This cannot be undone.',
@@ -67,251 +42,99 @@ export const AccountSettingsScreen: React.FC = () => {
         {
           text: 'Delete account',
           style: 'destructive',
-          onPress: () => {
-            Alert.alert(
-              'Confirm deletion',
-              'Are you absolutely sure you want to delete your account?',
-              [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                  text: 'Delete',
-                  style: 'destructive',
-                  onPress: async () => {
-                    try {
-                      await deleteAccount();
-                    } catch (error) {
-                      Alert.alert('Error', 'Failed to delete account');
-                    }
-                  },
+          onPress: () =>
+            Alert.alert('Confirm deletion', 'Are you absolutely sure you want to delete your account?', [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Delete',
+                style: 'destructive',
+                onPress: async () => {
+                  try {
+                    await deleteAccount();
+                  } catch {
+                    Alert.alert("Couldn't delete the account", 'Try again.');
+                  }
                 },
-              ]
-            );
-          },
+              },
+            ]),
         },
-      ]
+      ],
     );
-  };
 
-  const handleDownloadMyData = async () => {
-    setExportingData(true);
+  const handleDownload = async () => {
+    setExporting(true);
     try {
       const { body, filename } = await downloadSetsCsvExport();
-      const title =
-        filename?.replace(/\.csv$/i, '') || 'MesoIQ workout data export';
-      await Share.share({
-        message: body,
-        title,
-      });
+      await Share.share({ message: body, title: filename?.replace(/\.csv$/i, '') || 'MesoIQ workout data export' });
     } catch (err) {
-      Alert.alert(
-        'Could not export data',
-        err instanceof Error ? err.message : 'Something went wrong.'
-      );
+      Alert.alert("Couldn't export your data", err instanceof Error ? err.message : 'Something went wrong.');
     } finally {
-      setExportingData(false);
+      setExporting(false);
     }
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Account Information</Text>
-        <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Email</Text>
-          <Text style={styles.infoValue}>{user?.email || 'N/A'}</Text>
+    <Screen bottom="none">
+      <DetailHeader title="Account" onBack={() => navigation.goBack()} />
+
+      <Card padding={16}>
+        <View style={styles.profile}>
+          <View style={styles.avatar}>
+            <Text style={styles.initial}>{(email[0] ?? '?').toUpperCase()}</Text>
+          </View>
+          <View style={styles.flex}>
+            <Text style={styles.signedIn}>Signed in</Text>
+            <Text style={styles.email} numberOfLines={1}>
+              {email}
+            </Text>
+          </View>
         </View>
-      </View>
+      </Card>
 
-      <View style={[styles.section, styles.dataSection]}>
-        <Text style={styles.sectionTitle}>Data</Text>
-        <Text style={styles.dataDescription}>
-          Download your training history as a spreadsheet, or permanently delete
-          your account. Deleted accounts keep data for 90 days per policy, then it
-          is removed.
-        </Text>
+      <SectionLabel>DATA</SectionLabel>
+      <Card gap={0}>
+        <MenuAction
+          label={exporting ? 'Preparing your data…' : 'Download my data'}
+          meta="Every program, cycle and set, as a file"
+          onPress={handleDownload}
+          disabled={exporting}
+        />
+      </Card>
 
-        <View style={styles.dataPanel}>
-          <TouchableOpacity
-            style={styles.dataRow}
-            onPress={handleDownloadMyData}
-            disabled={exportingData}
-            accessibilityRole="button"
-            accessibilityLabel="Download my data"
-          >
-            {exportingData ? (
-              <ActivityIndicator color={themeColors.primary.light} size="small" />
-            ) : (
-              <MaterialIcons
-                name="download"
-                size={22}
-                color={themeColors.primary.light}
-              />
-            )}
-            <Text style={styles.dataRowLabel}>Download my data</Text>
-            <MaterialIcons
-              name="chevron-right"
-              size={22}
-              color={themeColors.text.muted}
-            />
-          </TouchableOpacity>
+      <SectionLabel>ACCOUNT</SectionLabel>
+      <Card gap={0}>
+        <MenuGroup>
+          <MenuAction label="Sign out" onPress={handleSignOut} />
+          <MenuAction label="Delete account" meta="Removes all programs, cycles and logged sets" destructive onPress={handleDeleteAccount} />
+        </MenuGroup>
+      </Card>
 
-          <View style={styles.dataRowSeparator} />
+      {__DEV__ ? (
+        <Card gap={0} variant="subtle">
+          <MenuAction label="Style guide" meta="Development builds only" onPress={() => navigation.navigate('StyleGuide')} />
+        </Card>
+      ) : null}
 
-          <TouchableOpacity
-            style={styles.dataRow}
-            onPress={() => setDangerZoneOpen((open) => !open)}
-            accessibilityRole="button"
-            accessibilityState={{ expanded: dangerZoneOpen }}
-            accessibilityLabel="Delete account options"
-          >
-            <MaterialIcons
-              name="delete-outline"
-              size={22}
-              color={themeColors.accent.error}
-            />
-            <Text style={styles.dataRowLabelDanger}>Delete account</Text>
-            <MaterialIcons
-              name="keyboard-arrow-down"
-              size={22}
-              color={themeColors.text.muted}
-              style={dangerZoneOpen ? styles.dataRowArrowOpen : undefined}
-            />
-          </TouchableOpacity>
-
-          {dangerZoneOpen ? (
-            <>
-              <View style={styles.dataRowSeparator} />
-              <View style={styles.dataExpanded}>
-                <Text style={styles.dataExpandedHint}>
-                  This disables sign-in and schedules your data for deletion. You
-                  will confirm in the next step.
-                </Text>
-                <TouchableOpacity
-                  style={styles.dataRow}
-                  onPress={handleDeleteAccount}
-                  accessibilityRole="button"
-                  accessibilityLabel="Confirm delete account"
-                >
-                  <MaterialIcons
-                    name="delete-forever"
-                    size={22}
-                    color={themeColors.accent.error}
-                  />
-                  <Text style={styles.dataRowLabelDanger}>
-                    Permanently delete my account
-                  </Text>
-                  <MaterialIcons
-                    name="chevron-right"
-                    size={22}
-                    color={themeColors.text.muted}
-                  />
-                </TouchableOpacity>
-              </View>
-            </>
-          ) : null}
-        </View>
-      </View>
-    </ScrollView>
+      <Text style={styles.footer}>MesoIQ {packageJson.version}</Text>
+    </Screen>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#1a1a1a',
-  },
-  content: {
-    padding: 20,
-  },
-  section: {
-    marginBottom: 32,
-  },
-  dataSection: {
-    alignSelf: 'stretch',
-    width: '100%',
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#fff',
-    marginBottom: 16,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#333',
-  },
-  infoLabel: {
-    fontSize: 16,
-    color: '#999',
-  },
-  infoValue: {
-    fontSize: 16,
-    color: '#fff',
-    fontWeight: '500',
-  },
-  dataDescription: {
-    fontSize: 14,
-    color: themeColors.text.muted,
-    lineHeight: 20,
-    marginBottom: spacing.md,
-  },
-  dataPanel: {
-    alignSelf: 'stretch',
+  profile: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  avatar: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.round,
+    backgroundColor: colors.surface.field,
     borderWidth: 1,
-    borderColor: themeColors.border.default,
-    borderRadius: borderRadius.sm,
-    overflow: 'hidden',
-  },
-  dataRow: {
-    flexDirection: 'row',
+    borderColor: colors.border.field,
     alignItems: 'center',
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md,
-    gap: spacing.sm,
+    justifyContent: 'center',
   },
-  dataRowSeparator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: themeColors.border.default,
-  },
-  dataRowLabel: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: '600',
-    color: themeColors.primary.light,
-  },
-  dataRowLabelDanger: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: '600',
-    color: themeColors.accent.error,
-  },
-  dataRowArrowOpen: {
-    transform: [{ rotate: '180deg' }],
-  },
-  dataExpanded: {
-    paddingBottom: spacing.sm,
-  },
-  dataExpandedHint: {
-    fontSize: 13,
-    color: themeColors.text.muted,
-    lineHeight: 18,
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.xs,
-    paddingBottom: spacing.sm,
-  },
-  headerSignOut: {
-    marginRight: 4,
-    paddingVertical: 4,
-    paddingLeft: 8,
-  },
-  headerSignOutText: {
-    color: themeColors.accent.error,
-    fontSize: 16,
-    fontWeight: '600',
-  },
+  initial: { ...type.cardTitle, color: colors.text.secondary },
+  flex: { flex: 1, gap: 2 },
+  signedIn: { ...type.metaSmall, color: colors.text.muted },
+  email: { ...type.body, fontWeight: '600', color: colors.text.primary },
+  footer: { ...type.metaSmall, color: colors.text.faint, textAlign: 'center', marginTop: 8 },
 });
-

@@ -1,609 +1,568 @@
-import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  ActivityIndicator,
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-} from 'react-native';
-import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
-import { plansService } from '../../services/plansService';
-import { exercisesService } from '../../services/exercisesService';
-import { Plan, ExerciseListItem, ExercisesByCategory } from '../../types/plan';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { RootStackParamList } from '../../navigation/AppNavigator';
-import { themeColors, borderRadius, spacing } from '../../theme/colors';
-import { PlanNameSection } from '../../components/plan/PlanNameSection';
-import { DayRow } from '../../components/plan/DayRow';
-import { ExerciseList } from '../../components/plan/ExerciseList';
-import { AddExerciseModal } from '../../components/plan/AddExerciseModal';
+import { plansService } from '../../services/plansService';
+import type { PlanDayInput } from '../../types/plan';
+import {
+  ALL_MUSCLES,
+  DEFAULT_STARTING_SETS,
+  GROWTH_TARGET_SETS,
+  LOW_VOLUME_SETS,
+  lowVolumeMuscles,
+  programVolumeProfile,
+  repRangeLabel,
+  toMuscle,
+} from '../../analytics';
+import { invalidatePlans } from '../../hooks/usePlans';
+import { ProfileBars } from '../../components/charts';
+import {
+  Button,
+  Card,
+  ChevronGlyph,
+  ErrorState,
+  MenuAction,
+  MenuGroup,
+  PlusGlyph,
+  ReorderGlyph,
+  SectionLabel,
+  Segmented,
+  Sheet,
+  Skeleton,
+  Stepper,
+  TextField,
+  WarningGlyph,
+} from '../../components/ui';
+import { AddExerciseSheet } from '../../components/exercise/AddExerciseSheet';
+import { features } from '../../config/features';
+import { colors, muscleLabel, muscleShort, radius, space, type } from '../../theme';
+import { isDefaultDayName, workoutDisplayName } from '../../utils/names';
 
-type EditPlanScreenRouteProp = RouteProp<RootStackParamList, 'EditPlan'>;
-type EditPlanScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'EditPlan'>;
+type Route = RouteProp<RootStackParamList, 'EditPlan'>;
+type Nav = NativeStackNavigationProp<RootStackParamList, 'EditPlan'>;
 
-interface Exercise {
+interface BuilderExercise {
+  key: string;
   id: number;
   name: string;
   category: string;
-  order: number;
+  repMin: number | null;
+  repMax: number | null;
+  startingSets: number | null;
 }
 
-interface WorkoutDay {
-  id: string;
-  dayNumber: number;
+interface BuilderDay {
+  key: string;
+  /** Empty until the lifter names the day; the display falls back to its muscles. */
+  name: string;
   isRestDay: boolean;
-  exercises: Exercise[];
+  exercises: BuilderExercise[];
+}
+
+let keySeq = 0;
+const nextKey = (prefix: string) => `${prefix}-${++keySeq}`;
+
+function move<T>(list: T[], from: number, to: number): T[] {
+  if (to < 0 || to >= list.length) return list;
+  const next = [...list];
+  const [item] = next.splice(from, 1);
+  next.splice(to, 0, item);
+  return next;
+}
+
+function dayLabel(day: BuilderDay, index: number): string {
+  if (day.isRestDay) return 'Rest';
+  return day.name.trim() || workoutDisplayName(null, day.exercises.map((e) => e.category), index + 1);
+}
+
+function snapshot(name: string, days: BuilderDay[]): string {
+  return JSON.stringify({
+    name,
+    days: days.map((d) => ({ n: d.name, r: d.isRestDay, e: d.exercises.map((e) => [e.id, e.repMin, e.repMax, e.startingSets]) })),
+  });
 }
 
 export const EditPlanScreen: React.FC = () => {
-  const route = useRoute<EditPlanScreenRouteProp>();
-  const navigation = useNavigation<EditPlanScreenNavigationProp>();
-  const { planId } = route.params;
-
-  const [plan, setPlan] = useState<Plan | null>(null);
-  const [planName, setPlanName] = useState('');
-  const [workoutDays, setWorkoutDays] = useState<WorkoutDay[]>([]);
-  const [availableExercises, setAvailableExercises] = useState<ExerciseListItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const { params } = useRoute<Route>();
+  const navigation = useNavigation<Nav>();
+  const insets = useSafeAreaInsets();
+  const planId = params?.planId;
+  const [name, setName] = useState('');
+  const [days, setDays] = useState<BuilderDay[]>([]);
+  const [loading, setLoading] = useState(planId != null);
   const [error, setError] = useState<string | null>(null);
-  const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
-  const [addExerciseModalVisible, setAddExerciseModalVisible] = useState(false);
-  const [selectedDayForExercise, setSelectedDayForExercise] = useState<string | null>(null);
-  const [creatingExercise, setCreatingExercise] = useState(false);
-  const [autoSelectExerciseId, setAutoSelectExerciseId] = useState<number | null>(null);
-  const [showSuccess, setShowSuccess] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [addFor, setAddFor] = useState<string | null>(null);
+  const [targetsFor, setTargetsFor] = useState<{ day: string; ex: string } | null>(null);
+  const [menu, setMenu] = useState<{ day: string; ex?: string } | null>(null);
+  const initial = useRef<string>(snapshot('', []));
 
-  useEffect(() => {
-    fetchPlan();
-    fetchExercises();
-  }, [planId]);
-
-  const fetchPlan = async () => {
+  const load = useCallback(async () => {
+    if (planId == null) {
+      const first: BuilderDay = { key: nextKey('day'), name: '', isRestDay: false, exercises: [] };
+      setDays([first]);
+      setExpanded(first.key);
+      initial.current = snapshot('', [first]);
+      return;
+    }
+    setLoading(true);
+    setError(null);
     try {
-      setLoading(true);
-      setError(null);
-      const data = await plansService.getPlan(planId);
-      setPlan(data);
-      setPlanName(data.name);
-
-      // Transform API data to local state format
-      const days: WorkoutDay[] = data.days
+      const plan = await plansService.getPlan(planId);
+      const loaded: BuilderDay[] = [...(plan.days ?? [])]
         .sort((a, b) => a.dayNumber - b.dayNumber)
-        .map((day) => ({
-          id: `day-${day.dayNumber}`,
-          dayNumber: day.dayNumber,
-          isRestDay: day.isRestDay,
-          exercises: day.workout?.workoutExercises
+        .map((d) => ({
+          key: nextKey('day'),
+          name: d.workout?.name && !isDefaultDayName(d.workout.name) ? d.workout.name : '',
+          isRestDay: d.isRestDay,
+          exercises: [...(d.workout?.workoutExercises ?? [])]
             .sort((a, b) => a.order - b.order)
             .map((we) => ({
+              key: nextKey('ex'),
               id: we.exercise.id,
               name: we.exercise.name,
               category: we.exercise.category,
-              order: we.order,
-            })) || [],
+              repMin: we.repMin ?? null,
+              repMax: we.repMax ?? null,
+              startingSets: we.startingSets ?? null,
+            })),
         }));
-
-      setWorkoutDays(days);
-      // Expand all days by default
-      if (days.length > 0) {
-        setExpandedDays(new Set(days.map(day => day.id)));
-      }
-    } catch (err: any) {
-      console.error('Failed to fetch plan', err);
-      setError(err.message || 'Failed to load plan');
+      setName(plan.name);
+      setDays(loaded);
+      setExpanded(loaded.find((d) => !d.isRestDay)?.key ?? null);
+      initial.current = snapshot(plan.name, loaded);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't load this.");
     } finally {
       setLoading(false);
     }
-  };
+  }, [planId]);
 
-  const fetchExercises = async () => {
-    try {
-      const data = await exercisesService.getExercises();
-      // Flatten exercises by category into a single array
-      const allExercises = Object.entries(data).flatMap(([category, exerciseList]) =>
-        exerciseList.map((exercise) => ({
-          ...exercise,
-          category: category,
-        }))
-      );
-      setAvailableExercises(allExercises);
-    } catch (err: any) {
-      console.error('Failed to fetch exercises', err);
-    }
-  };
+  useEffect(() => {
+    load();
+  }, [load]);
 
-  const toggleDayExpand = (dayId: string) => {
-    setExpandedDays((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(dayId)) {
-        newSet.delete(dayId);
-      } else {
-        newSet.add(dayId);
-      }
-      return newSet;
-    });
-  };
+  const dirty = snapshot(name, days) !== initial.current;
+  const training = days.filter((d) => !d.isRestDay);
+  const problems = [
+    !name.trim() && 'Name the program.',
+    training.length === 0 && 'Add at least one training day.',
+    training.some((d) => d.exercises.length === 0) && 'Every training day needs an exercise.',
+  ].filter(Boolean) as string[];
+  const valid = problems.length === 0;
 
-  const addWorkoutDay = () => {
-    const dayNumber = workoutDays.length + 1;
-    const newDay: WorkoutDay = {
-      id: `day-${dayNumber}`,
-      dayNumber: dayNumber,
-      isRestDay: false,
-      exercises: [],
-    };
-    setWorkoutDays([...workoutDays, newDay]);
-    setExpandedDays((prev) => new Set([...prev, newDay.id]));
-  };
-
-  const removeWorkoutDay = (dayId: string) => {
-    const day = workoutDays.find((d) => d.id === dayId);
-    if (day && day.exercises.length > 0) {
-      Alert.alert(
-        'Delete Day',
-        'This day has exercises. Are you sure you want to delete it?',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Delete',
-            style: 'destructive',
-            onPress: () => {
-              setWorkoutDays((prev) => prev.filter((d) => d.id !== dayId));
-              setExpandedDays((prev) => {
-                const newSet = new Set(prev);
-                newSet.delete(dayId);
-                return newSet;
-              });
-            },
-          },
-        ]
-      );
-    } else {
-      setWorkoutDays((prev) => prev.filter((d) => d.id !== dayId));
-      setExpandedDays((prev) => {
-        const newSet = new Set(prev);
-        newSet.delete(dayId);
-        return newSet;
-      });
-    }
-  };
-
-  const toggleRestDay = (dayId: string) => {
-    setWorkoutDays((prev) =>
-      prev.map((day) => {
-        if (day.id === dayId) {
-          return {
-            ...day,
-            isRestDay: !day.isRestDay,
-            exercises: !day.isRestDay ? [] : day.exercises, // Clear exercises when switching to rest day
-          };
-        }
-        return day;
-      })
-    );
-  };
-
-  const handleAddExercise = (dayId: string) => {
-    setSelectedDayForExercise(dayId);
-    setAddExerciseModalVisible(true);
-  };
-
-  const handleSelectExercises = (exercises: ExerciseListItem[]) => {
-    if (!selectedDayForExercise) return;
-
-    const day = workoutDays.find((d) => d.id === selectedDayForExercise);
-    if (!day || day.isRestDay) return;
-
-    // Filter out exercises that already exist in the day
-    const newExercises: Exercise[] = exercises
-      .filter((exercise) => {
-        if (day.exercises.some((ex) => ex.id === exercise.id)) {
-          return false;
-        }
-        return true;
-      })
-      .map((exercise, index) => ({
-        id: exercise.id,
-        name: exercise.name,
-        category: exercise.category,
-        order: day.exercises.length + index + 1,
-      }));
-
-    if (newExercises.length === 0) {
-      Alert.alert('Exercise Already Added', 'All selected exercises are already in the day.');
-      return;
-    }
-
-    if (newExercises.length < exercises.length) {
-      Alert.alert(
-        'Some Exercises Already Added',
-        `${exercises.length - newExercises.length} exercise(s) were already in the day and were skipped.`
-      );
-    }
-
-    setWorkoutDays((prev) =>
-      prev.map((d) => {
-        if (d.id === selectedDayForExercise) {
-          return {
-            ...d,
-            exercises: [...d.exercises, ...newExercises],
-          };
-        }
-        return d;
-      })
-    );
-
-    // Clear auto-select after selection
-    setAutoSelectExerciseId(null);
-    setAddExerciseModalVisible(false);
-  };
-
-  const handleRemoveExercise = (dayId: string, exerciseId: number) => {
-    setWorkoutDays((prev) =>
-      prev.map((day) => {
-        if (day.id === dayId) {
-          const updatedExercises = day.exercises
-            .filter((ex) => ex.id !== exerciseId)
-            .map((ex, index) => ({ ...ex, order: index + 1 }));
-          return {
-            ...day,
-            exercises: updatedExercises,
-          };
-        }
-        return day;
-      })
-    );
-  };
-
-  const handleReorderExercises = (dayId: string, reorderedExercises: Exercise[]) => {
-    setWorkoutDays((prev) =>
-      prev.map((day) => {
-        if (day.id === dayId) {
-          return {
-            ...day,
-            exercises: reorderedExercises,
-          };
-        }
-        return day;
-      })
-    );
-  };
-
-  const handleCreateExercise = async (name: string, category: string) => {
-    try {
-      setCreatingExercise(true);
-      const newExercise = await exercisesService.createExercise({ name, category });
-      
-      // Refresh exercises list
-      await fetchExercises();
-
-      // Auto-select the newly created exercise
-      setAutoSelectExerciseId(newExercise.id);
-    } catch (err: any) {
-      console.error('Failed to create exercise', err);
-      Alert.alert('Error', err.message || 'Failed to create exercise');
-      throw err;
-    } finally {
-      setCreatingExercise(false);
-    }
-  };
-
-  const handleSave = async () => {
-    if (!planName.trim()) {
-      Alert.alert('Error', 'Please enter a plan name');
-      return;
-    }
-
-    if (workoutDays.length === 0) {
-      Alert.alert('Error', 'Please add at least one day to the plan');
-      return;
-    }
-
-    try {
-      setSaving(true);
-      setError(null);
-
-      // Transform local state back to API format
-      const days = workoutDays.map((day) => ({
-        isRestDay: day.isRestDay,
-        workoutExercises: day.exercises.map((ex) => ({
-          id: ex.id,
-          order: ex.order,
+  const profile = useMemo(
+    () =>
+      programVolumeProfile(
+        training.map((d) => ({
+          exercises: d.exercises.map((e) => ({
+            muscle: toMuscle(e.category),
+            startingSets: features.PROGRAM_TARGETS ? e.startingSets : null,
+          })),
         })),
-      }));
+      ),
+    [training],
+  );
+  const exerciseCount = training.reduce((n, d) => n + d.exercises.length, 0);
+  const startingSets = ALL_MUSCLES.reduce((n, m) => n + profile[m], 0);
+  const lowest = lowVolumeMuscles(profile)[0];
 
-      await plansService.updatePlan(planId, {
-        name: planName.trim(),
-        days,
-      });
+  // --- Edits ---------------------------------------------------------------
 
-      // Show success message and auto-navigate back
-      setShowSuccess(true);
-      setTimeout(() => {
+  const updateDay = (key: string, fn: (d: BuilderDay) => BuilderDay) => setDays((prev) => prev.map((d) => (d.key === key ? fn(d) : d)));
+
+  const setRest = (day: BuilderDay, rest: boolean) => {
+    if (rest && day.exercises.length > 0) {
+      Alert.alert('Make this a rest day?', `This clears its ${day.exercises.length} ${day.exercises.length === 1 ? 'exercise' : 'exercises'}.`, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Make rest day', style: 'destructive', onPress: () => updateDay(day.key, (d) => ({ ...d, isRestDay: true, exercises: [] })) },
+      ]);
+      return;
+    }
+    updateDay(day.key, (d) => ({ ...d, isRestDay: rest }));
+    if (!rest) setExpanded(day.key);
+  };
+
+  const addDay = () => {
+    const d: BuilderDay = { key: nextKey('day'), name: '', isRestDay: false, exercises: [] };
+    setDays((prev) => [...prev, d]);
+    setExpanded(d.key);
+  };
+
+  const menuDayIndex = menu ? days.findIndex((d) => d.key === menu.day) : -1;
+  const menuDay = menuDayIndex >= 0 ? days[menuDayIndex] : null;
+  const menuExIndex = menuDay && menu?.ex ? menuDay.exercises.findIndex((e) => e.key === menu.ex) : -1;
+
+  const closeMenu = (fn: () => void) => () => {
+    setMenu(null);
+    fn();
+  };
+
+  const targetDay = targetsFor ? days.find((d) => d.key === targetsFor.day) : undefined;
+  const targetEx = targetDay?.exercises.find((e) => e.key === targetsFor?.ex);
+  const setTarget = (patch: Partial<BuilderExercise>) => {
+    if (!targetsFor) return;
+    updateDay(targetsFor.day, (d) => ({ ...d, exercises: d.exercises.map((e) => (e.key === targetsFor.ex ? { ...e, ...patch } : e)) }));
+  };
+
+  // --- Save and cancel -----------------------------------------------------
+
+  const cancel = () => {
+    if (!dirty) {
+      navigation.goBack();
+      return;
+    }
+    Alert.alert('Discard changes?', 'Your edits to this program are not saved.', [
+      { text: 'Keep editing', style: 'cancel' },
+      { text: 'Discard', style: 'destructive', onPress: () => navigation.goBack() },
+    ]);
+  };
+
+  const save = async () => {
+    if (!valid) {
+      Alert.alert("Can't save yet", problems.join('\n'));
+      return;
+    }
+    const payload: PlanDayInput[] = days.map((d) => ({
+      ...(features.DAY_NAMES && d.name.trim() ? { name: d.name.trim().slice(0, 40) } : {}),
+      isRestDay: d.isRestDay,
+      workoutExercises: d.exercises.map((e, i) => ({
+        id: e.id,
+        order: i + 1,
+        ...(features.PROGRAM_TARGETS ? { repMin: e.repMin, repMax: e.repMax, startingSets: e.startingSets } : {}),
+      })),
+    }));
+    setSaving(true);
+    try {
+      if (planId != null) {
+        await plansService.updatePlan(planId, { name: name.trim(), days: payload });
+        invalidatePlans();
+        initial.current = snapshot(name, days);
         navigation.goBack();
-      }, 1500);
-    } catch (err: any) {
-      console.error('Failed to save plan', err);
-      setError(err.message || 'Failed to save plan');
-      Alert.alert('Error', err.message || 'Failed to save plan');
+      } else {
+        const created = await plansService.createPlan({ name: name.trim(), days: payload });
+        invalidatePlans();
+        initial.current = snapshot(name, days);
+        navigation.replace('PlanDetail', { planId: created.id });
+      }
+    } catch (err) {
+      Alert.alert("Couldn't save the program", err instanceof Error ? err.message : 'Try again.');
     } finally {
       setSaving(false);
     }
   };
 
-  if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={themeColors.primary.main} />
-        <Text style={styles.loadingText}>Loading plan...</Text>
-      </View>
-    );
-  }
+  // --- Render --------------------------------------------------------------
 
-  if (error && !plan) {
-    return (
-      <View style={styles.container}>
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity onPress={fetchPlan} style={styles.retryButton}>
-            <Text style={styles.retryText}>Retry</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  }
+  const addDayObj = days.find((d) => d.key === addFor);
+  const addDayIndex = days.findIndex((d) => d.key === addFor);
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
-    >
+    <View style={styles.root}>
+      <View style={[styles.nav, { paddingTop: insets.top + 6 }]}>
+        <Pressable onPress={cancel} accessibilityRole="button" hitSlop={10} style={styles.navHit}>
+          <Text style={styles.navText}>Cancel</Text>
+        </Pressable>
+        <Text style={styles.navTitle} accessibilityRole="header">
+          {planId != null && !params?.draftFromAI ? 'Edit program' : 'New program'}
+        </Text>
+        <Pressable onPress={save} disabled={saving} accessibilityRole="button" hitSlop={10} style={styles.navHit}>
+          <Text style={[styles.navText, styles.navSave, !valid && styles.navSaveInvalid]}>Save</Text>
+        </Pressable>
+      </View>
+
       <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
+        style={styles.root}
+        contentContainerStyle={[styles.content, { paddingBottom: 110 + insets.bottom }]}
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
       >
-        {/* Plan Name Section */}
-        <PlanNameSection planName={planName} onPlanNameChange={setPlanName} />
-
-        {/* Success Message */}
-        {showSuccess && (
-          <View style={styles.successBanner}>
-            <MaterialIcons
-              name="check-circle"
-              size={20}
-              color={themeColors.accent.success || '#10b981'}
-            />
-            <Text style={styles.successBannerText}>Plan updated successfully</Text>
-          </View>
-        )}
-
-        {/* Error Message */}
-        {error && (
-          <View style={styles.errorBanner}>
-            <Text style={styles.errorBannerText}>{error}</Text>
-          </View>
-        )}
-
-        {/* Add Day Button */}
-        <TouchableOpacity
-          style={styles.addDayButton}
-          onPress={addWorkoutDay}
-          activeOpacity={0.7}
-        >
-          <MaterialIcons
-            name="add"
-            size={20}
-            color={themeColors.primary.main}
-          />
-          <Text style={styles.addDayButtonText}>Add Day</Text>
-        </TouchableOpacity>
-
-        {/* Days List */}
-        {workoutDays.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No days in this plan</Text>
-            <Text style={styles.emptySubtext}>
-              Tap "Add Day" to create your first workout day
-            </Text>
-          </View>
+        {error ? (
+          <ErrorState onRetry={load} />
+        ) : loading ? (
+          <>
+            <Skeleton height={70} />
+            <Skeleton height={140} />
+            <Skeleton height={220} />
+          </>
         ) : (
-          workoutDays.map((day) => (
-            <DayRow
-              key={day.id}
-              dayId={day.id}
-              dayNumber={day.dayNumber}
-              isRestDay={day.isRestDay}
-              exercises={day.exercises}
-              isExpanded={expandedDays.has(day.id)}
-              onToggleExpand={() => toggleDayExpand(day.id)}
-              onToggleRestDay={() => toggleRestDay(day.id)}
-              onDeleteDay={() => removeWorkoutDay(day.id)}
-              onAddExercise={() => handleAddExercise(day.id)}
-            >
-              <ExerciseList
-                exercises={day.exercises}
-                onReorder={(reordered) => handleReorderExercises(day.id, reordered)}
-                onRemoveExercise={(exerciseId) => handleRemoveExercise(day.id, exerciseId)}
-              />
-            </DayRow>
-          ))
-        )}
+          <>
+            {params?.draftFromAI ? (
+              <Card variant="subtle">
+                <Text style={styles.meta}>The draft is saved as a program. Change anything before you start a cycle.</Text>
+              </Card>
+            ) : null}
+            <TextField label="NAME" value={name} onChangeText={setName} placeholder="Upper / Lower 4×" />
 
-        {/* Save Button */}
-        <TouchableOpacity
-          style={[
-            styles.saveButton,
-            (!planName.trim() || workoutDays.length === 0 || saving) && styles.saveButtonDisabled,
-          ]}
-          onPress={handleSave}
-          disabled={!planName.trim() || workoutDays.length === 0 || saving}
-          activeOpacity={0.7}
-        >
-          {saving ? (
-            <ActivityIndicator size="small" color={themeColors.text.primary} />
-          ) : (
-            <>
-              <MaterialIcons
-                name="save"
-                size={20}
-                color={themeColors.text.primary}
+            <Card padding={16} gap={12}>
+              <View style={styles.readoutHead}>
+                <SectionLabel info="volumeProfile">AS YOU BUILD IT</SectionLabel>
+                <Text style={styles.meta}>
+                  {training.length} {training.length === 1 ? 'day' : 'days'} · {exerciseCount} {exerciseCount === 1 ? 'exercise' : 'exercises'} ·{' '}
+                  {startingSets} starting sets
+                </Text>
+              </View>
+              <ProfileBars
+                bars={ALL_MUSCLES.map((m) => ({ label: muscleShort(m), value: profile[m], warn: profile[m] > 0 && profile[m] < LOW_VOLUME_SETS }))}
+                height={40}
               />
-              <Text style={styles.saveButtonText}>Save Plan</Text>
-            </>
-          )}
-        </TouchableOpacity>
+              {lowest ? (
+                <View style={styles.warn}>
+                  <WarningGlyph size={14} />
+                  <Text style={styles.warnText}>
+                    {muscleLabel(lowest)} {lowest === 'BACK' || lowest === 'CHEST' ? 'gets' : 'get'}{' '}
+                    {profile[lowest]} {profile[lowest] === 1 ? 'set' : 'sets'} a week. Most muscles need {GROWTH_TARGET_SETS} or more to grow.
+                  </Text>
+                </View>
+              ) : null}
+            </Card>
+
+            {days.map((day, index) => {
+              const label = dayLabel(day, index);
+              const open = !day.isRestDay && expanded === day.key;
+              const sets = day.exercises.reduce(
+                (n, e) => n + ((features.PROGRAM_TARGETS ? e.startingSets : null) ?? DEFAULT_STARTING_SETS),
+                0,
+              );
+              if (day.isRestDay) {
+                return (
+                  <Pressable
+                    key={day.key}
+                    onLongPress={() => setMenu({ day: day.key })}
+                    accessibilityHint="Long-press to move or remove"
+                    style={styles.restDay}
+                  >
+                    <ReorderGlyph />
+                    <Text style={[styles.dayTitle, styles.restTitle]}>Day {index + 1} · Rest</Text>
+                    <View style={styles.segment}>
+                      <Segmented size="small" options={[{ value: 'work', label: 'Work' }, { value: 'rest', label: 'Rest' }]} value="rest" onChange={(v) => setRest(day, v === 'rest')} />
+                    </View>
+                  </Pressable>
+                );
+              }
+              return (
+                <Card key={day.key} gap={10} padding={14}>
+                  <Pressable
+                    onPress={() => setExpanded(open ? null : day.key)}
+                    onLongPress={() => setMenu({ day: day.key })}
+                    accessibilityRole="button"
+                    accessibilityState={{ expanded: open }}
+                    accessibilityHint="Long-press to move or remove the day"
+                    style={styles.dayHead}
+                  >
+                    <ReorderGlyph />
+                    {features.DAY_NAMES && open ? (
+                      <View style={styles.nameRow}>
+                        <Text style={styles.dayTitle}>Day {index + 1} · </Text>
+                        <TextInput
+                          value={day.name}
+                          onChangeText={(t) => updateDay(day.key, (d) => ({ ...d, name: t }))}
+                          placeholder={workoutDisplayName(null, day.exercises.map((e) => e.category), index + 1)}
+                          placeholderTextColor={colors.text.faint}
+                          maxLength={40}
+                          accessibilityLabel={`Day ${index + 1} name`}
+                          keyboardAppearance="dark"
+                          style={[styles.dayTitle, styles.nameInput]}
+                        />
+                      </View>
+                    ) : (
+                      <Text style={[styles.dayTitle, styles.flex]} numberOfLines={1}>
+                        Day {index + 1} · {label}
+                      </Text>
+                    )}
+                    {!open ? (
+                      <>
+                        <Text style={styles.meta}>
+                          {day.exercises.length} ex · {sets} sets
+                        </Text>
+                        <ChevronGlyph />
+                      </>
+                    ) : null}
+                  </Pressable>
+                  {open ? (
+                    <>
+                      <Segmented size="small" options={[{ value: 'work', label: 'Work' }, { value: 'rest', label: 'Rest' }]} value="work" onChange={(v) => setRest(day, v === 'rest')} />
+                      <View>
+                        {day.exercises.length === 0 ? <Text style={styles.meta}>No exercises yet.</Text> : null}
+                        {day.exercises.map((e, i) => {
+                          const range = repRangeLabel(e.repMin, e.repMax);
+                          return (
+                            <Pressable
+                              key={e.key}
+                              onLongPress={() => setMenu({ day: day.key, ex: e.key })}
+                              accessibilityHint="Long-press to move or remove"
+                              style={[styles.exRow, i > 0 && styles.divider]}
+                            >
+                              <ReorderGlyph />
+                              <Text style={styles.exName} numberOfLines={1}>
+                                {e.name}
+                              </Text>
+                              {features.PROGRAM_TARGETS ? (
+                                <Pressable
+                                  onPress={() => setTargetsFor({ day: day.key, ex: e.key })}
+                                  accessibilityRole="button"
+                                  accessibilityLabel={`${e.name} targets`}
+                                  hitSlop={8}
+                                  style={styles.spec}
+                                >
+                                  <Text style={styles.specText}>{range ? `${range} reps` : 'Set reps'}</Text>
+                                </Pressable>
+                              ) : null}
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+                      <Button label="Add exercise" variant="dashed" size="small" icon={<PlusGlyph />} onPress={() => setAddFor(day.key)} full />
+                      {index === days.findIndex((d) => !d.isRestDay) ? (
+                        <Text style={styles.hint}>
+                          {features.DAY_NAMES ? 'Tap a day name to rename it. ' : ''}Long-press a row to move or remove it.
+                        </Text>
+                      ) : null}
+                    </>
+                  ) : null}
+                </Card>
+              );
+            })}
+
+            <Button label="Add day" variant="dashed" icon={<PlusGlyph />} onPress={addDay} full />
+          </>
+        )}
       </ScrollView>
 
-      {/* Add Exercise Modal (combined with create) */}
-      <AddExerciseModal
-        visible={addExerciseModalVisible}
-        onClose={() => {
-          setAddExerciseModalVisible(false);
-          setSelectedDayForExercise(null);
-          setAutoSelectExerciseId(null);
+      <View style={[styles.footer, { paddingBottom: 12 + insets.bottom }]}>
+        <Button label="Save program" onPress={save} loading={saving} disabled={loading} full />
+      </View>
+
+      <AddExerciseSheet
+        visible={addFor != null}
+        onClose={() => setAddFor(null)}
+        subtitle={addDayObj ? `Day ${addDayIndex + 1} · ${dayLabel(addDayObj, addDayIndex)}` : undefined}
+        excludeIds={addDayObj?.exercises.map((e) => e.id) ?? []}
+        onAdd={(list) => {
+          if (!addFor) return;
+          updateDay(addFor, (d) => ({
+            ...d,
+            exercises: [
+              ...d.exercises,
+              ...list.map((e) => ({ key: nextKey('ex'), id: e.id, name: e.name, category: e.category, repMin: null, repMax: null, startingSets: null })),
+            ],
+          }));
+          setAddFor(null);
         }}
-        exercises={availableExercises}
-        onSelectExercises={handleSelectExercises}
-        onCreateExercise={handleCreateExercise}
-        creating={creatingExercise}
-        autoSelectExerciseId={autoSelectExerciseId}
       />
-    </KeyboardAvoidingView>
+
+      <Sheet visible={menu != null} onClose={() => setMenu(null)} title={menuDay ? (menuExIndex >= 0 ? menuDay.exercises[menuExIndex].name : `Day ${menuDayIndex + 1}`) : ''}>
+        {menuDay && menuExIndex >= 0 ? (
+          <MenuGroup>
+            {menuExIndex > 0 ? (
+              <MenuAction label="Move up" onPress={closeMenu(() => updateDay(menuDay.key, (d) => ({ ...d, exercises: move(d.exercises, menuExIndex, menuExIndex - 1) })))} />
+            ) : null}
+            {menuExIndex < menuDay.exercises.length - 1 ? (
+              <MenuAction label="Move down" onPress={closeMenu(() => updateDay(menuDay.key, (d) => ({ ...d, exercises: move(d.exercises, menuExIndex, menuExIndex + 1) })))} />
+            ) : null}
+            <MenuAction
+              label="Remove exercise"
+              destructive
+              onPress={closeMenu(() => updateDay(menuDay.key, (d) => ({ ...d, exercises: d.exercises.filter((_, i) => i !== menuExIndex) })))}
+            />
+          </MenuGroup>
+        ) : menuDay ? (
+          <MenuGroup>
+            {menuDayIndex > 0 ? <MenuAction label="Move up" onPress={closeMenu(() => setDays((p) => move(p, menuDayIndex, menuDayIndex - 1)))} /> : null}
+            {menuDayIndex < days.length - 1 ? <MenuAction label="Move down" onPress={closeMenu(() => setDays((p) => move(p, menuDayIndex, menuDayIndex + 1)))} /> : null}
+            <MenuAction label="Remove day" destructive onPress={closeMenu(() => setDays((p) => p.filter((_, i) => i !== menuDayIndex)))} />
+          </MenuGroup>
+        ) : null}
+      </Sheet>
+
+      <Sheet visible={!!targetEx} onClose={() => setTargetsFor(null)} title={targetEx?.name ?? ''} subtitle="Rep range and week-1 sets">
+        {targetEx ? (
+          <View style={styles.targets}>
+            {[
+              { label: 'Rep min', value: targetEx.repMin ?? 8, min: 1, max: targetEx.repMax ?? 50, set: (v: number) => setTarget({ repMin: v, repMax: Math.max(v, targetEx.repMax ?? v) }) },
+              { label: 'Rep max', value: targetEx.repMax ?? 12, min: targetEx.repMin ?? 1, max: 50, set: (v: number) => setTarget({ repMax: v, repMin: targetEx.repMin ?? Math.min(8, v) }) },
+              { label: 'Starting sets', value: targetEx.startingSets ?? DEFAULT_STARTING_SETS, min: 1, max: 10, set: (v: number) => setTarget({ startingSets: v }) },
+            ].map((row) => (
+              <View key={row.label} style={styles.targetRow}>
+                <Text style={[styles.dayTitle, styles.flex]}>{row.label}</Text>
+                <Stepper label={row.label} value={row.value} min={row.min} max={row.max} onChange={row.set} />
+              </View>
+            ))}
+          </View>
+        ) : null}
+      </Sheet>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: themeColors.background.primary,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: themeColors.background.primary,
-  },
-  loadingText: {
-    color: themeColors.text.secondary,
-    fontSize: 14,
-    marginTop: spacing.sm,
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: spacing.lg,
-  },
-  errorText: {
-    color: themeColors.accent.error,
-    fontSize: 16,
-    textAlign: 'center',
-    marginBottom: spacing.md,
-  },
-  retryButton: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    backgroundColor: themeColors.background.surface,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: themeColors.border.default,
-  },
-  retryText: {
-    color: themeColors.primary.main,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: spacing.md,
-    paddingBottom: spacing.xl * 2,
-  },
-  successBanner: {
+  root: { flex: 1, backgroundColor: colors.bg },
+  nav: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.2)',
-    borderRadius: borderRadius.md,
-    padding: spacing.sm,
-    marginBottom: spacing.md,
-    gap: spacing.xs,
+    justifyContent: 'space-between',
+    paddingHorizontal: space.gutter,
+    paddingBottom: 6,
   },
-  successBannerText: {
-    color: themeColors.accent.success || '#10b981',
-    fontSize: 14,
-    fontWeight: '600',
+  navHit: { minHeight: 44, minWidth: 60, justifyContent: 'center' },
+  navText: { ...type.body, color: colors.text.body },
+  navTitle: { ...type.sheetTitle, color: colors.text.primary },
+  navSave: { fontWeight: '600', textAlign: 'right', color: colors.action.fill },
+  navSaveInvalid: { color: colors.data.reference },
+  content: { paddingHorizontal: space.gutter, paddingTop: space.screenTop, gap: space.cardGap },
+  meta: { ...type.metaSmall, color: colors.text.muted },
+  readoutHead: { gap: 4 },
+  warn: { flexDirection: 'row', gap: 8, alignItems: 'flex-start' },
+  warnText: { flex: 1, ...type.meta, color: colors.warning.base },
+  flex: { flex: 1 },
+  dayHead: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 36 },
+  dayTitle: { ...type.cardTitle, color: colors.text.primary },
+  nameRow: { flex: 1, flexDirection: 'row', alignItems: 'center' },
+  nameInput: {
     flex: 1,
+    paddingVertical: 2,
+    borderBottomWidth: 1,
+    borderStyle: 'dashed',
+    borderBottomColor: colors.border.stronger,
   },
-  errorBanner: {
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.2)',
-    borderRadius: borderRadius.md,
-    padding: spacing.sm,
-    marginBottom: spacing.md,
-  },
-  errorBannerText: {
-    color: themeColors.accent.error,
-    fontSize: 14,
-  },
-  addDayButton: {
+  restDay: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: themeColors.background.surface,
+    gap: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: radius.card,
     borderWidth: 1,
-    borderColor: themeColors.primary.main,
-    borderRadius: borderRadius.md,
-    paddingVertical: spacing.md,
-    marginBottom: spacing.md,
-    gap: spacing.xs,
+    borderColor: colors.border.divider,
+    backgroundColor: colors.surface.subtle,
   },
-  addDayButtonText: {
-    color: themeColors.primary.main,
-    fontSize: 16,
-    fontWeight: '600',
+  restTitle: { flex: 1, color: colors.text.faint, fontWeight: '400' },
+  segment: { width: 130 },
+  exRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, minHeight: 44 },
+  divider: { borderTopWidth: 1, borderTopColor: colors.border.divider },
+  exName: { flex: 1, ...type.body, color: colors.text.body },
+  spec: {
+    paddingVertical: 5,
+    paddingHorizontal: 9,
+    borderRadius: radius.field,
+    backgroundColor: colors.surface.field,
   },
-  emptyContainer: {
-    paddingVertical: spacing.xl * 2,
-    alignItems: 'center',
+  specText: { ...type.metaSmall, color: colors.text.secondary },
+  hint: { ...type.metaSmall, color: colors.text.faint },
+  footer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingTop: 12,
+    paddingHorizontal: space.gutter,
+    backgroundColor: colors.bg,
+    borderTopWidth: 1,
+    borderTopColor: colors.border.divider,
   },
-  emptyText: {
-    color: themeColors.text.secondary,
-    fontSize: 16,
-    marginBottom: spacing.sm,
-  },
-  emptySubtext: {
-    color: themeColors.text.muted,
-    fontSize: 14,
-    textAlign: 'center',
-  },
-  saveButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: themeColors.primary.main,
-    borderRadius: borderRadius.md,
-    paddingVertical: spacing.md,
-    marginTop: spacing.lg,
-    gap: spacing.xs,
-  },
-  saveButtonDisabled: {
-    opacity: 0.5,
-  },
-  saveButtonText: {
-    color: themeColors.text.primary,
-    fontSize: 16,
-    fontWeight: '700',
-  },
+  targets: { gap: 12 },
+  targetRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
 });

@@ -1,313 +1,127 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  ActivityIndicator,
-  RefreshControl,
-} from 'react-native';
-import {
-  MesocycleSelect,
-  VolumeSetRadarChart,
-  MuscleGroupBarChart,
-  SegmentedControl,
-  DisplayMode,
-  MesocycleProgress,
-  ExerciseDataTab,
-} from '../../components/data';
-import { dashboardService, MuscleGroupData } from '../../services/dashboardService';
-import { ExerciseStats } from '../../types/exercise';
-import { themeColors, spacing } from '../../theme/colors';
+import React, { useEffect, useMemo, useState } from 'react';
+import { RefreshControl } from 'react-native';
+import { useNavigation, useRoute, type CompositeNavigationProp, type RouteProp } from '@react-navigation/native';
+import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { DataSubTab, MainTabParamList } from '../../navigation/MainNavigator';
+import type { RootStackParamList } from '../../navigation/AppNavigator';
+import { RANGE_LABELS, TIME_RANGES, type TimeRange } from '../../analytics';
+import { useMesocycleSummaries } from '../../hooks/useMesocycleSummaries';
+import { useTrainingHistory } from '../../hooks/useTrainingHistory';
+import { useConsistency } from '../../hooks/useConsistency';
+import { Chip, PickerSheet, Screen, ScreenHeader, Segmented } from '../../components/ui';
+import { colors } from '../../theme';
+import { CycleTab } from '../data/CycleTab';
+import { ProgressTab } from '../data/ProgressTab';
+import { HistoryTab } from '../data/HistoryTab';
+import { invalidateExerciseHistory } from '../../hooks/exerciseSessions';
 
-type DataTab = 'analytics' | 'mesocycle' | 'exercises' | string;
+type Nav = CompositeNavigationProp<BottomTabNavigationProp<MainTabParamList, 'Data'>, NativeStackNavigationProp<RootStackParamList>>;
+
+// Remembered for the app session.
+let lastTab: DataSubTab = 'cycle';
+let lastRange: TimeRange = '6m';
 
 export const DataScreen: React.FC = () => {
-  // Tab state
-  const [activeTab, setActiveTab] = useState<DataTab>('analytics');
-
-  // Analytics tab state
-  const [selectedMesocycleId, setSelectedMesocycleId] = useState<number | 'all'>('all');
-  const [volumeData, setVolumeData] = useState<MuscleGroupData | null>(null);
-  const [setData, setSetData] = useState<MuscleGroupData | null>(null);
-  const [displayMode, setDisplayMode] = useState<DisplayMode>('volume');
-  const [loading, setLoading] = useState(true);
+  const navigation = useNavigation<Nav>();
+  const route = useRoute<RouteProp<MainTabParamList, 'Data'>>();
+  const [tab, setTab] = useState<DataSubTab>(route.params?.tab ?? lastTab);
+  const [range, setRange] = useState<TimeRange>(lastRange);
+  const [year, setYear] = useState(new Date().getFullYear());
+  const [mesoId, setMesoId] = useState<number | null>(null);
+  const [picker, setPicker] = useState<DataSubTab | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const mesos = useMesocycleSummaries();
+  const history = useTrainingHistory();
+  const consistency = useConsistency(year);
 
-  // Exercise tab state
-  const [exerciseStats, setExerciseStats] = useState<ExerciseStats | null>(null);
-  const [exerciseLoading, setExerciseLoading] = useState(false);
-  const [exerciseError, setExerciseError] = useState<string | null>(null);
-
-  // Get unique muscle groups from data
-  const muscleGroups = useMemo(() => {
-    const groups = new Set<string>();
-    if (volumeData) Object.keys(volumeData).forEach(g => groups.add(g));
-    if (setData) Object.keys(setData).forEach(g => groups.add(g));
-    return Array.from(groups).sort();
-  }, [volumeData, setData]);
-
-  // Fetch data function
-  const fetchData = async (isRefresh = false) => {
-    try {
-      if (!isRefresh) {
-        setLoading(true);
-      }
-      setError(null);
-
-      const mesocycleId = selectedMesocycleId === 'all' ? undefined : selectedMesocycleId;
-      const { volumeData: vData, setData: sData } = await dashboardService.fetchDashboardData(mesocycleId);
-      
-      setVolumeData(vData);
-      setSetData(sData);
-    } catch (err: any) {
-      console.error('Error fetching dashboard data:', err);
-      setError(err.message || 'Failed to fetch data');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
-
-  // Fetch data when mesocycle selection changes
   useEffect(() => {
-    fetchData();
-  }, [selectedMesocycleId]);
-
-  // Fetch exercise stats when exercises tab is active
-  useEffect(() => {
-    if (activeTab === 'exercises' && !exerciseStats && !exerciseLoading) {
-      const fetchExerciseStats = async () => {
-        try {
-          setExerciseLoading(true);
-          setExerciseError(null);
-          const stats = await dashboardService.getExerciseStats();
-          setExerciseStats(stats);
-        } catch (err: any) {
-          console.error('Error fetching exercise stats:', err);
-          setExerciseError(err.message || 'Failed to fetch exercise stats');
-        } finally {
-          setExerciseLoading(false);
-        }
-      };
-      fetchExerciseStats();
+    if (route.params?.tab) {
+      setTab(route.params.tab);
+      navigation.setParams({ tab: undefined });
     }
-  }, [activeTab, exerciseStats, exerciseLoading]);
+  }, [route.params?.tab, navigation]);
 
-  // Handle refresh
-  const handleRefresh = () => {
+  useEffect(() => {
+    lastTab = tab;
+  }, [tab]);
+  useEffect(() => {
+    lastRange = range;
+  }, [range]);
+
+  // Default to the running cycle, else the latest.
+  const defaultMeso = useMemo(
+    () => mesos.data.find((m) => m.status === 'IN_PROGRESS') ?? mesos.data[0] ?? null,
+    [mesos.data],
+  );
+  const selectedMeso = mesos.data.find((m) => m.id === mesoId) ?? defaultMeso;
+
+  const onRefresh = async () => {
     setRefreshing(true);
-    fetchData(true);
+    invalidateExerciseHistory();
+    await Promise.all([mesos.refresh(), history.refresh(), consistency.refresh()]);
+    setRefreshing(false);
   };
 
-  // Handle mesocycle change
-  const handleMesocycleChange = (value: number | 'all') => {
-    setSelectedMesocycleId(value);
-  };
-
-  // Handle display mode change
-  const handleDisplayModeChange = (mode: string) => {
-    setDisplayMode(mode as DisplayMode);
-  };
-
-  // Loading state (initial load)
-  if (loading && !refreshing) {
-    return (
-      <View style={[styles.container, styles.centerContent]}>
-        <ActivityIndicator size="large" color={themeColors.primary.main} />
-        <Text style={styles.loadingText}>Loading data...</Text>
-      </View>
+  const chip =
+    tab === 'cycle' ? (
+      selectedMeso ? (
+        <Chip label={selectedMeso.name} dropdown onPress={() => setPicker('cycle')} accessibilityLabel={`Mesocycle: ${selectedMeso.name}`} />
+      ) : null
+    ) : tab === 'progress' ? (
+      <Chip label={RANGE_LABELS[range]} dropdown onPress={() => setPicker('progress')} accessibilityLabel={`Time range: ${RANGE_LABELS[range]}`} />
+    ) : (
+      <Chip label={String(year)} dropdown onPress={() => setPicker('history')} accessibilityLabel={`Year: ${year}`} />
     );
-  }
-
-  // Error state (full screen)
-  if (error && !volumeData && !setData) {
-    return (
-      <View style={[styles.container, styles.centerContent]}>
-        <Text style={styles.errorText}>{error}</Text>
-        <Text style={styles.retryText} onPress={() => fetchData()}>
-          Tap to retry
-        </Text>
-      </View>
-    );
-  }
-
-  const radarTitle = selectedMesocycleId === 'all' 
-    ? 'All Time Volume & Sets' 
-    : 'Mesocycle Volume & Sets';
-
-  const tabs = [
-    { label: 'Analytics', value: 'analytics' },
-    { label: 'Mesocycle', value: 'mesocycle' },
-    { label: 'Exercises', value: 'exercises' },
-  ];
 
   return (
-    <View style={styles.container}>
-      {/* Tab Switcher */}
-      <View style={styles.tabContainer}>
-        <SegmentedControl
-          segments={tabs}
-          value={activeTab}
-          onChange={(value) => setActiveTab(value)}
+    <Screen refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.text.secondary} />}>
+      <ScreenHeader title="Data" right={chip} />
+      <Segmented
+        options={[
+          { value: 'cycle', label: 'Cycle' },
+          { value: 'progress', label: 'Progress' },
+          { value: 'history', label: 'History' },
+        ]}
+        value={tab}
+        onChange={setTab}
+      />
+      {tab === 'cycle' ? (
+        <CycleTab
+          mesocycleId={selectedMeso?.id ?? null}
+          hasCycles={mesos.loading || mesos.data.length > 0}
+          onGoToPlan={() => navigation.navigate('Plan')}
         />
-      </View>
-
-      {/* Tab Content */}
-      {activeTab === 'analytics' && (
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.contentContainer}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={handleRefresh}
-              tintColor={themeColors.primary.main}
-              colors={[themeColors.primary.main]}
-            />
-          }
-        >
-          {/* Mesocycle Filter */}
-          <MesocycleSelect
-            value={selectedMesocycleId}
-            onChange={handleMesocycleChange}
-            showAllTime
-          />
-
-          {/* Radar Chart */}
-          <VolumeSetRadarChart
-            volumeData={volumeData}
-            setData={setData}
-            title={radarTitle}
-            loading={loading}
-            error={error}
-          />
-
-          {/* Volume/Sets Toggle */}
-          <View style={styles.toggleContainer}>
-            <SegmentedControl
-              segments={[
-                { label: 'Volume', value: 'volume' },
-                { label: 'Sets', value: 'sets' },
-              ]}
-              value={displayMode}
-              onChange={handleDisplayModeChange}
-              alignSelf={true}
-              containerStyle={{ marginBottom: 0 }}
-            />
-          </View>
-
-          {/* Bar Charts per Muscle Group */}
-          {muscleGroups.map(muscleGroup => (
-            <MuscleGroupBarChart
-              key={muscleGroup}
-              muscleGroup={muscleGroup}
-              volumeInstances={volumeData?.[muscleGroup] || []}
-              setInstances={setData?.[muscleGroup] || []}
-              mode={displayMode}
-            />
-          ))}
-
-          {/* Empty State */}
-          {muscleGroups.length === 0 && !loading && (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyText}>
-                No data available for the selected period.
-              </Text>
-              <Text style={styles.emptySubtext}>
-                Complete some workouts to see your muscle group analytics.
-              </Text>
-            </View>
-          )}
-        </ScrollView>
+      ) : tab === 'progress' ? (
+        <ProgressTab range={range} />
+      ) : (
+        <HistoryTab year={year} />
       )}
 
-      {activeTab === 'mesocycle' && (
-        <MesocycleProgress />
-      )}
-
-      {activeTab === 'exercises' && (
-        <>
-          {exerciseLoading ? (
-            <View style={[styles.container, styles.centerContent]}>
-              <ActivityIndicator size="large" color={themeColors.primary.main} />
-              <Text style={styles.loadingText}>Loading exercise data...</Text>
-            </View>
-          ) : exerciseError ? (
-            <View style={[styles.container, styles.centerContent]}>
-              <Text style={styles.errorText}>{exerciseError}</Text>
-              <Text style={styles.retryText} onPress={() => {
-                setExerciseStats(null);
-                setExerciseError(null);
-              }}>
-                Tap to retry
-              </Text>
-            </View>
-          ) : (
-            <ExerciseDataTab exerciseStats={exerciseStats} />
-          )}
-        </>
-      )}
-    </View>
+      <PickerSheet
+        visible={picker === 'cycle'}
+        onClose={() => setPicker(null)}
+        title="Mesocycle"
+        options={mesos.data.map((m) => ({ value: m.id, label: m.name, meta: [m.planName, m.status === 'IN_PROGRESS' ? 'Running' : null].filter(Boolean).join(' · ') }))}
+        value={selectedMeso?.id ?? null}
+        onChange={setMesoId}
+      />
+      <PickerSheet
+        visible={picker === 'progress'}
+        onClose={() => setPicker(null)}
+        title="Time range"
+        options={TIME_RANGES.map((r) => ({ value: r, label: RANGE_LABELS[r] }))}
+        value={range}
+        onChange={setRange}
+      />
+      <PickerSheet
+        visible={picker === 'history'}
+        onClose={() => setPicker(null)}
+        title="Year"
+        options={consistency.data.years.map((y) => ({ value: y, label: String(y) }))}
+        value={year}
+        onChange={setYear}
+      />
+    </Screen>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: themeColors.background.primary,
-  },
-  tabContainer: {
-    padding: spacing.sm,
-    paddingBottom: spacing.sm,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  contentContainer: {
-    padding: spacing.sm,
-    paddingBottom: spacing.xl * 3,
-  },
-  centerContent: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    color: themeColors.text.secondary,
-    fontSize: 14,
-    marginTop: spacing.sm,
-  },
-  errorText: {
-    color: themeColors.accent.error,
-    fontSize: 16,
-    textAlign: 'center',
-    marginBottom: spacing.md,
-    paddingHorizontal: spacing.lg,
-  },
-  retryText: {
-    color: themeColors.primary.main,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  toggleContainer: {
-    marginBottom: spacing.lg,
-  },
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: spacing.xl * 2,
-  },
-  emptyText: {
-    color: themeColors.text.secondary,
-    fontSize: 16,
-    textAlign: 'center',
-    marginBottom: spacing.sm,
-  },
-  emptySubtext: {
-    color: themeColors.text.muted,
-    fontSize: 14,
-    textAlign: 'center',
-    paddingHorizontal: spacing.lg,
-  },
-});

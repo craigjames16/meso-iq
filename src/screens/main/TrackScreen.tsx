@@ -1,683 +1,370 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  ActivityIndicator, 
-  ScrollView,
-  TouchableOpacity,
-  Alert,
-} from 'react-native';
-import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
-import { workoutService } from '../../services/workoutService';
-import { CurrentMesocycle, PlanInstanceDay } from '../../types/workout';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import { WorkoutCalendar } from '../../components/WorkoutCalendar';
-import { WeekViewCards } from '../../components/WeekViewCards';
-import { ConsistencyCard } from '../../components/data/ConsistencyCard';
-import { LastWorkoutVolumeCard } from '../../components/data/LastWorkoutVolumeCard';
-import { VolumeOverTimeCard } from '../../components/data/VolumeOverTimeCard';
-import { themeColors, spacing } from '../../theme/colors';
-import { useSchedule } from '../../context/ScheduleContext';
-import type { CompositeNavigationProp } from '@react-navigation/native';
+import React, { useMemo, useState } from 'react';
+import { Alert, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { useNavigation, type CompositeNavigationProp } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { MainTabParamList } from '../../navigation/MainNavigator';
 import type { RootStackParamList } from '../../navigation/AppNavigator';
+import { useAuth } from '../../hooks/useAuth';
+import { useToday } from '../../hooks/useToday';
+import { useTrainingHistory } from '../../hooks/useTrainingHistory';
+import { useCycleStats } from '../../hooks/useCycleStats';
+import { usePlans } from '../../hooks/usePlans';
+import {
+  DEFAULT_STARTING_SETS,
+  daysSinceTrained,
+  isMainSet,
+  sessionTotals,
+  toMuscle,
+  volume,
+  weekStreak,
+  type Muscle,
+} from '../../analytics';
+import {
+  AvatarButton,
+  Button,
+  Card,
+  CardTitle,
+  ErrorState,
+  FlameGlyph,
+  PlusGlyph,
+  Screen,
+  ScreenHeader,
+  SectionLabel,
+  Skeleton,
+} from '../../components/ui';
+import { TodayHero, type TodayHeroProps } from '../../components/track/TodayHero';
+import { ThisWeek, type WeekCell } from '../../components/track/ThisWeek';
+import { OffPlanSheet } from '../../components/track/OffPlanSheet';
+import { SessionRow } from '../../components/session/SessionRow';
+import { colors, muscleLabel, radius, type, size } from '../../theme';
+import { calendarDaysBetween, formatDaysAgo, formatLongDay, formatNumber, formatWeight } from '../../utils/format';
+import { workoutDisplayName } from '../../utils/names';
 
-type TrackScreenNavigationProp = CompositeNavigationProp<
+type Nav = CompositeNavigationProp<
   BottomTabNavigationProp<MainTabParamList, 'Track'>,
   NativeStackNavigationProp<RootStackParamList>
 >;
 
-// Next Workout Component
-const NextWorkout: React.FC<{
-  currentMesocycle: CurrentMesocycle | null;
-  onStartWorkout: (workoutInstanceId: number) => void;
-  isStartingWorkout: boolean;
-}> = ({ currentMesocycle, onStartWorkout, isStartingWorkout }) => {
-  const navigation = useNavigation<TrackScreenNavigationProp>();
-  const { schedule, loading: scheduleLoading, refreshSchedule, fetchSchedule } = useSchedule();
-  const [nextWorkout, setNextWorkout] = useState<PlanInstanceDay | null>(null);
-  const [inProgressWorkout, setInProgressWorkout] = useState<any | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [isStarting, setIsStarting] = useState(false);
+const RECENT_COUNT = 3;
+const RECOVERING_DAYS = 3;
 
-  // Sync nextWorkout with schedule from context
-  useEffect(() => {
-    if (currentMesocycle && schedule) {
-      const firstUpcomingDay = schedule.upcomingDays.length > 0 ? schedule.upcomingDays[0] : null;
-      setNextWorkout(firstUpcomingDay);
-    } else if (!currentMesocycle) {
-      setNextWorkout(null);
-    }
-  }, [currentMesocycle, schedule]);
-
-  // Refetch data whenever the screen comes into focus
-  useFocusEffect(
-    React.useCallback(() => {
-      const fetchNextWorkout = async () => {
-        // Reset states when screen comes into focus
-        setIsStarting(false);
-        setError(null);
-        setLoading(true);
-        setInProgressWorkout(null);
-        
-        try {
-          // Priority 1: Check for in-progress workout instance
-          console.log('Checking for in-progress workout...');
-          const latestWorkoutData = await workoutService.getLatestWorkout();
-          
-          if (latestWorkoutData && latestWorkoutData.inProgress === true) {
-            console.log('Found in-progress workout:', latestWorkoutData);
-            setInProgressWorkout(latestWorkoutData);
-            setLoading(false);
-            return;
-          }
-        } catch (err) {
-          console.error('Error fetching workout data:', err);
-          const errorMessage = err instanceof Error ? err.message : 'An error occurred';
-          console.error('Error details:', {
-            message: errorMessage,
-            error: err,
-          });
-          setError(errorMessage);
-        } finally {
-          setLoading(false);
-        }
-      };
-      
-      fetchNextWorkout();
-    }, [])
-  );
-
-  const handleContinueWorkout = async () => {
-    if (!inProgressWorkout || !inProgressWorkout.workoutInstanceId) {
-      setError('Missing workout instance ID');
-      Alert.alert('Error', 'Missing workout instance ID');
-      return;
-    }
-
-    setIsStarting(true);
-    try {
-      onStartWorkout(inProgressWorkout.workoutInstanceId);
-    } catch (err) {
-      console.error('Error continuing workout:', err);
-      setError(err instanceof Error ? err.message : 'Failed to continue workout');
-      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to continue workout');
-      setIsStarting(false);
-    }
-  };
-
-  const handleStartWorkout = async () => {
-    if (!nextWorkout) return;
-
-    setIsStarting(true);
-    
-    // Check if we need to create a new iteration (day has placeholder id)
-    if (nextWorkout.id === -1 || nextWorkout.planInstanceId === -1) {
-      // Create a new iteration first
-      try {
-        const iterationNumber = nextWorkout.planInstance?.iterationNumber || 1;
-        const newIteration = await workoutService.createPlanInstance(
-          currentMesocycle?.plan.id || 0,
-          currentMesocycle?.id,
-          typeof iterationNumber === 'number' ? iterationNumber : undefined
-        );
-        
-        // Get the first day from the new iteration that matches the planDayId
-        const firstDay = newIteration.days.find((d: any) => d.planDayId === nextWorkout.planDayId) || newIteration.days[0];
-        
-        // Check if it's a rest day - if so, complete it instead of starting a workout
-        if (firstDay.planDay.isRestDay || !firstDay.planDay.workout) {
-          // Complete the rest day
-          await workoutService.completeRestDay(newIteration.id, firstDay.id);
-          
-          // Reload by refreshing schedule - nextWorkout will update via useEffect
-          await refreshSchedule();
-        } else {
-          // Start the workout with the new iteration's first day
-          const workoutInstance = await workoutService.startWorkout(newIteration.id, firstDay.id);
-          onStartWorkout(workoutInstance.id);
-        }
-      } catch (err) {
-        console.error('Error creating new iteration:', err);
-        setError(err instanceof Error ? err.message : 'Failed to create new iteration');
-        Alert.alert('Error', err instanceof Error ? err.message : 'Failed to create new iteration');
-        setIsStarting(false);
-      }
-    } else {
-      // Start workout with existing iteration
-      if (!nextWorkout.planInstanceId || !nextWorkout.id) {
-        setError('Missing required workout information. Please try refreshing the page.');
-        Alert.alert('Error', 'Missing required workout information. Please try refreshing the page.');
-        setIsStarting(false);
-        return;
-      }
-      
-      // Check if it's a rest day
-      if (nextWorkout.planDay?.isRestDay) {
-        try {
-          await workoutService.completeRestDay(nextWorkout.planInstanceId, nextWorkout.id);
-          
-          // Reload by refreshing schedule - nextWorkout will update via useEffect
-          await refreshSchedule();
-          setIsStarting(false);
-        } catch (err) {
-          console.error('Error completing rest day:', err);
-          setError(err instanceof Error ? err.message : 'Failed to complete rest day');
-          Alert.alert('Error', err instanceof Error ? err.message : 'Failed to complete rest day');
-          setIsStarting(false);
-        }
-      } else {
-        try {
-          const workoutInstance = await workoutService.startWorkout(
-            nextWorkout.planInstanceId, 
-            nextWorkout.id
-          );
-          onStartWorkout(workoutInstance.id);
-        } catch (err) {
-          console.error('Error starting workout:', err);
-          setError(err instanceof Error ? err.message : 'Failed to start workout');
-          Alert.alert('Error', err instanceof Error ? err.message : 'Failed to start workout');
-          setIsStarting(false);
-        }
-      }
-    }
-  };
-  
-  if (loading || scheduleLoading) {
-    return (
-      <View style={styles.nextWorkoutHeader}>
-        <View style={styles.nextWorkoutContent}>
-          <ActivityIndicator size="small" color="#fff" />
-        </View>
-      </View>
-    );
-  }
-  
-  if (error) {
-    return (
-      <View style={styles.nextWorkoutHeader}>
-        <View style={styles.nextWorkoutContent}>
-          <Text style={styles.errorText}>
-            Error loading next workout: {error}
-          </Text>
-        </View>
-      </View>
-    );
-  }
-  
-  const handleStartSingleWorkout = async () => {
-    try {
-      setIsStarting(true);
-      const workoutInstance = await workoutService.createStandaloneWorkout();
-      setIsStarting(false); // Reset loading state before navigation
-      onStartWorkout(workoutInstance.id);
-    } catch (err) {
-      console.error('Error creating standalone workout:', err);
-      const errorMessage = err instanceof Error ? err.message : 'Failed to create workout';
-      setError(errorMessage);
-      Alert.alert('Error', errorMessage);
-      setIsStarting(false);
-    }
-  };
-
-  const handleCreateMesocycle = () => {
-    // Navigate to Plan tab - using navigate since we're in a composite navigator
-    navigation.navigate('Plan');
-  };
-
-  const isButtonLoading = isStarting || isStartingWorkout;
-
-  // Priority 1: Show in-progress workout with Continue button
-  if (inProgressWorkout && inProgressWorkout.inProgress === true) {
-    const workoutName = inProgressWorkout.workoutName || 'Workout';
-    
-    return (
-      <View style={styles.nextWorkoutHeader}>
-        <View style={styles.nextWorkoutContent}>
-          <MaterialIcons name="fitness-center" size={24} color={themeColors.primary.main} />
-          <View style={styles.nextWorkoutInfo}>
-            <Text style={styles.nextWorkoutTitle}>
-              Continue Workout
-            </Text>
-            <Text style={styles.nextWorkoutSubtitle}>
-              {workoutName}
-            </Text>
-          </View>
-          
-          <TouchableOpacity
-            style={[
-              styles.playButton,
-              styles.workoutButton,
-              isButtonLoading && styles.buttonDisabled
-            ]}
-            onPress={handleContinueWorkout}
-            disabled={isButtonLoading}
-          >
-            {isButtonLoading ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <MaterialIcons 
-                name="play-arrow" 
-                size={20} 
-                color={"#fff"} 
-              />
-            )}
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  }
-
-  // Priority 2: Show next mesocycle workout or empty state
-  if (!nextWorkout || !nextWorkout.planDay) {
-    return (
-      <View style={styles.nextWorkoutHeader}>
-        <View style={styles.emptyStateContainer}>
-          <Text style={styles.emptyStateTitle}>
-            {!currentMesocycle ? 'Get Started' : 'No Upcoming Workouts'}
-          </Text>
-          <Text style={styles.emptyStateSubtitle}>
-            {!currentMesocycle 
-              ? 'Start a single workout or create a mesocycle to begin tracking your progress'
-              : 'Start a quick workout or check your mesocycle schedule'}
-          </Text>
-          <View style={styles.emptyStateButtons}>
-            <TouchableOpacity
-              style={[
-                styles.emptyStateButton,
-                styles.primaryButton,
-                isButtonLoading && styles.buttonDisabled
-              ]}
-              onPress={handleStartSingleWorkout}
-              disabled={isButtonLoading}
-            >
-              {isButtonLoading ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <>
-                  <MaterialIcons name="play-arrow" size={20} color="#fff" />
-                  <Text style={styles.emptyStateButtonText}>Start Single Workout</Text>
-                </>
-              )}
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.emptyStateButton,
-                styles.secondaryButton
-              ]}
-              onPress={handleCreateMesocycle}
-            >
-              <MaterialIcons name="fitness-center" size={20} color="#fff" />
-              <Text style={styles.emptyStateButtonText}>Create Mesocycle</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-    );
-  }
-  
-  const isRestDay = nextWorkout.planDay?.isRestDay || false;
-  const iterationNumber = nextWorkout.planInstance?.iterationNumber || 'Next';
-  const dayNumber = nextWorkout.planDay?.dayNumber || '?';
-  const hasWorkoutInstance = !!nextWorkout.workoutInstance;
-  const isWorkoutInProgress = hasWorkoutInstance && !nextWorkout.workoutInstance?.completedAt;
-  
-  // Format title as "Week X - Day X"
-  const titleText = typeof iterationNumber === 'number' 
-    ? `Week ${iterationNumber} - Day ${dayNumber}`
-    : `Day ${dayNumber}`;
-  
-  const planName = currentMesocycle?.plan?.name || '';
-
-  return (
-    <View style={styles.nextWorkoutHeader}>
-      <View style={styles.nextWorkoutContent}>
-        {isRestDay ? (
-          <View style={[
-            styles.avatar,
-            { backgroundColor: '#2196F3' }
-          ]}>
-            <Text style={styles.avatarText}>
-              {dayNumber}
-            </Text>
-          </View>
-        ) : (
-          <MaterialIcons name="fitness-center" size={24} color={themeColors.primary.main} />
-        )}
-        <View style={styles.nextWorkoutInfo}>
-          <Text style={styles.nextWorkoutTitle}>
-            {titleText}
-          </Text>
-          {planName ? (
-            <Text style={styles.nextWorkoutSubtitle}>
-              {planName}
-            </Text>
-          ) : null}
-        </View>
-        
-        <TouchableOpacity
-          style={[
-            styles.playButton,
-            isRestDay ? styles.restButton : styles.workoutButton,
-            isButtonLoading && styles.buttonDisabled
-          ]}
-          onPress={handleStartWorkout}
-          disabled={isButtonLoading}
-        >
-          {isButtonLoading ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <MaterialIcons 
-              name={isRestDay ? "check" : "play-arrow"} 
-              size={20} 
-              color={"#fff"} 
-            />
-          )}
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-};
+interface DayExercise {
+  id: number;
+  name: string;
+  category?: string;
+  order: number;
+}
 
 export const TrackScreen: React.FC = () => {
-  const navigation = useNavigation<TrackScreenNavigationProp>();
-  const { fetchHistory, fetchSchedule, clearSchedule, refreshSchedule } = useSchedule();
-  const [currentMesocycle, setCurrentMesocycle] = useState<CurrentMesocycle | null>(null);
-  const [isStartingWorkout, setIsStartingWorkout] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const navigation = useNavigation<Nav>();
+  const { user } = useAuth();
+  const today = useToday();
+  const history = useTrainingHistory();
+  const plans = usePlans();
+  const cycle = useCycleStats(today.mesocycle?.id ?? null);
+  const [offPlanOpen, setOffPlanOpen] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
-  // Extract fetch logic into reusable function
-  const fetchCurrentMesocycle = useCallback(async () => {
-    try {
-      const latestData = await workoutService.getLatestWorkout();
-      
-      // Handle case where endpoint returns null (404)
-      if (!latestData) {
-        setCurrentMesocycle((prevMesocycle) => {
-          if (prevMesocycle) {
-            clearSchedule();
-          }
-          return null;
-        });
-        setLoading(false);
-        return;
-      }
-      
-      // Extract mesocycle info from response
-      const mesocycleFromResponse = latestData.mesocycle;
-      const mesocycleId = latestData.mesocycleId;
-      
-      // Use functional setState to check if current mesocycle changed
-      setCurrentMesocycle((prevMesocycle) => {
-        // If we have a mesocycle from the response
-        if (mesocycleFromResponse && mesocycleId) {
-          // Check if mesocycle changed
-          if (!prevMesocycle || prevMesocycle.id !== mesocycleId) {
-            // Different mesocycle - force fetch schedule (bypasses cache to ensure fresh data)
-            fetchSchedule(mesocycleId, true).catch((err) => {
-              console.error('Error fetching schedule for new mesocycle:', err);
-            });
-          } else {
-            // Same mesocycle - force refresh the schedule to get latest data
-            // This ensures newly created mesocycles show their first day even if schedule was previously empty
-            refreshSchedule().catch((err) => {
-              console.error('Error refreshing schedule:', err);
-            });
-          }
-          return mesocycleFromResponse;
-        } else {
-          // No mesocycle found, clear schedule but keep history
-          if (prevMesocycle) {
-            clearSchedule();
-          }
-          return null;
-        }
-      });
-    } catch (err) {
-      console.error('Error fetching latest workout:', err);
-      let errorMessage = 'Failed to fetch latest workout';
-      
-      if (err instanceof Error) {
-        errorMessage = err.message;
-      } else if (typeof err === 'object' && err !== null) {
-        errorMessage = (err as any).message || JSON.stringify(err);
-      }
-      
-      console.error('Error details:', {
-        message: errorMessage,
-        error: err,
-        errorType: typeof err,
-      });
-      setError(errorMessage);
-    } finally {
-      setLoading(false);
+  const { sessions, muscleOf } = history.data;
+  const now = useMemo(() => new Date(), []);
+  const streak = weekStreak(sessions, now);
+
+  // Workout names per plan day, from the schedule, for This week and Recent.
+  const dayNames = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const d of today.upcomingDays as any[]) {
+      const dn = d.planDay?.dayNumber;
+      if (dn == null || map.has(dn)) continue;
+      const cats = (d.planDay?.workout?.workoutExercises ?? []).map((we: any) => we.exercise?.category);
+      map.set(dn, d.planDay?.isRestDay ? 'Rest' : workoutDisplayName(d.planDay?.workout?.name, cats, dn));
     }
-  }, [fetchSchedule, clearSchedule, refreshSchedule]);
+    return map;
+  }, [today.upcomingDays]);
 
-  // Fetch history on mount (only once, even without mesocycle)
-  useEffect(() => {
-    fetchHistory().catch((err) => {
-      console.error('Error fetching history on mount:', err);
-    });
-  }, []); // Empty deps - only run once on mount
+  const dayByInstance = useMemo(() => {
+    const map = new Map<number, number>();
+    for (const w of cycle.data.weeks) for (const d of w.days) if (d.workoutInstanceId) map.set(d.workoutInstanceId, d.dayNumber);
+    return map;
+  }, [cycle.data.weeks]);
 
-  // Fetch on mount
-  useEffect(() => {
-    fetchCurrentMesocycle();
-  }, [fetchCurrentMesocycle]);
-
-  // Refresh when screen comes into focus
-  useFocusEffect(
-    React.useCallback(() => {
-      fetchCurrentMesocycle();
-    }, [fetchCurrentMesocycle])
+  const next = today.nextDay as any;
+  const nextExercises: DayExercise[] = useMemo(
+    () =>
+      [...(next?.planDay?.workout?.workoutExercises ?? [])]
+        .sort((a: any, b: any) => a.order - b.order)
+        .map((we: any) => ({ id: we.exercise?.id, name: we.exercise?.name, category: we.exercise?.category, order: we.order })),
+    [next],
   );
 
-  const startWorkoutInstance = async (workoutInstanceId: number) => {
+  const startDay = async () => {
     try {
-      setIsStartingWorkout(true);
-      // Navigate to workout detail screen
-      navigation.navigate('WorkoutDetail', { workoutInstanceId });
-    } catch (error) {
-      console.error('Error starting workout instance:', error);
-      setError(
-        error instanceof Error
-          ? error.message
-          : 'Failed to start workout instance'
-      );
-      Alert.alert('Error', error instanceof Error ? error.message : 'Failed to start workout instance');
-    } finally {
-      setIsStartingWorkout(false);
+      const id = await today.startNextDay();
+      if (id != null) navigation.navigate('WorkoutDetail', { workoutInstanceId: id });
+      else cycle.refresh();
+    } catch (err) {
+      Alert.alert("Couldn't start the day", err instanceof Error ? err.message : 'Pull to refresh and try again.');
     }
   };
 
-  if (loading) {
-    return (
-      <View style={styles.container}>
-        <ActivityIndicator size="large" color="#fff" />
-      </View>
-    );
-  }
+  // --- Hero ----------------------------------------------------------------
 
-  if (error) {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.errorText}>{error}</Text>
-      </View>
-    );
-  }
+  const hero: TodayHeroProps | null = (() => {
+    if (today.loading && !today.mesocycle && !today.inProgress) return null;
+    const meso = today.mesocycle;
+    if (today.inProgress) {
+      const ip = today.inProgress;
+      const label = ip.mesocycleName
+        ? [ip.mesocycleName, ip.iteration != null && `Week ${ip.iteration}`, ip.dayNumber != null && `Day ${ip.dayNumber}`].filter(Boolean).join(' · ')
+        : 'Off-plan';
+      return {
+        kind: 'inProgress',
+        label: `${label} · In progress`.toUpperCase(),
+        title: workoutDisplayName(ip.workoutName, ip.categories, ip.dayNumber),
+        meta: `Resume · ${ip.loggedSets} ${ip.loggedSets === 1 ? 'set' : 'sets'} logged`,
+        onPlay: () => navigation.navigate('WorkoutDetail', { workoutInstanceId: ip.workoutInstanceId }),
+      };
+    }
+    if (meso && next) {
+      const week = next.planInstance?.iterationNumber;
+      const dayNumber = next.planDay?.dayNumber;
+      const label = [meso.name, week != null && `Week ${week}`, dayNumber != null && `Day ${dayNumber}`].filter(Boolean).join(' · ').toUpperCase();
+      if (next.planDay?.isRestDay) return { kind: 'rest', label, onDone: startDay, busy: today.starting };
+
+      const title = workoutDisplayName(next.planDay?.workout?.name, nextExercises.map((e) => e.category), dayNumber);
+      const workoutId = next.planDay?.workout?.id;
+      const lastSame = [...sessions].reverse().find((s) => s.workoutId === workoutId) ?? null;
+      const mainSetsIn = (exerciseId: number) =>
+        lastSame ? lastSame.sets.filter((s) => s.exerciseId === exerciseId && isMainSet(s)).sort((a, b) => a.setNumber - b.setNumber) : [];
+      const startingSets = nextExercises.reduce((t, e) => t + (mainSetsIn(e.id).length || DEFAULT_STARTING_SETS), 0);
+
+      let carryOver: { text: string; strong?: boolean }[] | null = null;
+      if (lastSame) {
+        const days = calendarDaysBetween(lastSame.completedAt, now);
+        carryOver = [
+          { text: `Last ${title} was ${formatDaysAgo(days)} at ` },
+          { text: `${formatNumber(volume(lastSame.sets))} lb`, strong: true },
+          { text: '.' },
+        ];
+        const first = nextExercises[0];
+        const firstSets = first ? mainSetsIn(first.id) : [];
+        if (first && firstSets.length > 0) {
+          carryOver.push(
+            { text: ' Opening set target: ' },
+            { text: `${first.name} ${firstSets.length} × ${firstSets[0].reps} @ ${formatWeight(firstSets[0].weight)} lb`, strong: true },
+            { text: '.' },
+          );
+        }
+      }
+      return {
+        kind: 'workout',
+        label,
+        title,
+        meta: [meso.plan?.name, `${nextExercises.length} ${nextExercises.length === 1 ? 'exercise' : 'exercises'}`, `${startingSets} sets`]
+          .filter(Boolean)
+          .join(' · '),
+        chips: nextExercises.slice(0, 3).map((e) => e.name),
+        moreChips: Math.max(0, nextExercises.length - 3),
+        carryOver,
+        onPlay: startDay,
+        busy: today.starting,
+      };
+    }
+    if (meso && !next) {
+      return {
+        kind: 'noCycle',
+        title: 'Cycle complete',
+        meta: `Every day in ${meso.name} is logged. Start the next cycle from Plan.`,
+        onStartCycle: () => navigation.navigate('Plan'),
+      };
+    }
+    if (history.data.loaded && sessions.length === 0 && !plans.loading && plans.data.length === 0) {
+      return { kind: 'newAccount', onBuild: () => navigation.navigate('Plan') };
+    }
+    return { kind: 'noCycle', onStartCycle: () => navigation.navigate('Plan') };
+  })();
+
+  const isNewAccount = hero?.kind === 'newAccount';
+
+  // --- Today hits ----------------------------------------------------------
+
+  const hitCategories = today.inProgress ? today.inProgress.categories : !next?.planDay?.isRestDay ? nextExercises.map((e) => e.category) : [];
+  const hits = [...new Set(hitCategories.map((c) => toMuscle(c)).filter((m): m is Muscle => !!m))].map((m) => ({
+    muscle: m,
+    days: daysSinceTrained(sessions, m, now, muscleOf),
+  }));
+
+  // --- This week -----------------------------------------------------------
+
+  const currentWeek = cycle.data.weeks.find((w) => w.isCurrent);
+  const weekCells: WeekCell[] = (currentWeek?.days ?? []).map((d) => {
+    const isToday =
+      !today.inProgress &&
+      next?.planInstance?.iterationNumber === currentWeek?.iteration &&
+      next?.planDay?.dayNumber === d.dayNumber;
+    const name = d.workoutName ?? dayNames.get(d.dayNumber) ?? `Day ${d.dayNumber}`;
+    const session = d.workoutInstanceId ? cycle.data.sessionById.get(d.workoutInstanceId) : undefined;
+    if (d.isRestDay) return { dayNumber: d.dayNumber, state: isToday ? 'today' : 'rest', name: 'Rest' };
+    if (d.state === 'done') {
+      return {
+        dayNumber: d.dayNumber,
+        state: 'done',
+        sets: session ? sessionTotals(session).hardSets : 0,
+        name: dayNames.get(d.dayNumber) ?? name,
+      };
+    }
+    if (isToday) return { dayNumber: d.dayNumber, state: 'today', name: dayNames.get(d.dayNumber) ?? name };
+    return { dayNumber: d.dayNumber, state: d.state === 'missed' ? 'missed' : 'planned', name: dayNames.get(d.dayNumber) ?? name };
+  });
+  const trainingCells = (currentWeek?.days ?? []).filter((d) => !d.isRestDay);
+  const weekDone = trainingCells.filter((d) => d.state === 'done').length;
+
+  // --- Recent --------------------------------------------------------------
+
+  const recent = [...sessions].reverse().slice(0, RECENT_COUNT);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await Promise.all([today.refresh(), history.refresh(), cycle.refresh(), plans.refresh()]);
+    setRefreshing(false);
+  };
 
   return (
-    <View style={styles.container}>
-      <NextWorkout 
-        currentMesocycle={currentMesocycle} 
-        onStartWorkout={startWorkoutInstance}
-        isStartingWorkout={isStartingWorkout}
+    <Screen refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.text.secondary} />}>
+      <ScreenHeader
+        title="Today"
+        subtitle={formatLongDay(now)}
+        right={
+          <>
+            {streak > 0 ? (
+              <View style={styles.streak} accessible accessibilityLabel={`${streak} week streak`}>
+                <FlameGlyph />
+                <Text style={styles.streakText}>{streak} WK</Text>
+              </View>
+            ) : null}
+            <AvatarButton initial={user?.email ?? '?'} onPress={() => navigation.navigate('AccountSettings')} />
+          </>
+        }
       />
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.contentContainer}>
-        <WeekViewCards mesocycleId={currentMesocycle?.id || null} />
-        <View style={styles.cardsGrid}>
-          <ConsistencyCard mesocycleId={currentMesocycle?.id || null} />
-          <LastWorkoutVolumeCard mesocycleId={currentMesocycle?.id || null} />
-        </View>
-        <VolumeOverTimeCard />
-        <WorkoutCalendar mesocycleId={currentMesocycle?.id || null} />
-      </ScrollView>
-    </View>
+
+      {today.error ? <ErrorState onRetry={onRefresh} /> : null}
+
+      {hero ? <TodayHero {...hero} /> : <Skeleton height={236} />}
+
+      {!isNewAccount && hits.length > 0 ? (
+        <Card padding={16} gap={11}>
+          <SectionLabel>TODAY HITS</SectionLabel>
+          <View style={styles.hits}>
+            {hits.map((h) => (
+              <View key={h.muscle} style={styles.hit} accessible accessibilityLabel={`${muscleLabel(h.muscle)}: ${h.days == null ? 'not trained yet' : `${h.days} days since trained`}`}>
+                <View
+                  style={[
+                    styles.dot,
+                    {
+                      backgroundColor:
+                        h.days == null ? colors.text.faint : h.days < RECOVERING_DAYS ? colors.warning.base : colors.success.base,
+                    },
+                  ]}
+                />
+                <View>
+                  <Text style={styles.hitName}>{muscleLabel(h.muscle)}</Text>
+                  <Text style={styles.hitSince}>
+                    {h.days == null ? 'not yet' : h.days === 0 ? 'today' : `${h.days} ${h.days === 1 ? 'day' : 'days'}`}
+                  </Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        </Card>
+      ) : null}
+
+      {!isNewAccount && today.mesocycle && weekCells.length > 0 ? (
+        <ThisWeek cells={weekCells} done={weekDone} total={trainingCells.length} />
+      ) : !isNewAccount && today.mesocycle && cycle.loading ? (
+        <Skeleton height={112} />
+      ) : null}
+
+      {!isNewAccount && (recent.length > 0 || history.loading) ? (
+        <Card padding={16} gap={12}>
+          <CardTitle title="Recent" action={{ label: 'All workouts', onPress: () => navigation.navigate('Data', { tab: 'history' }) }} />
+          {recent.length === 0 ? (
+            <Skeleton height={120} rounded="tile" />
+          ) : (
+            <View>
+              {recent.map((s, i) => (
+                <SessionRow
+                  key={s.workoutInstanceId}
+                  session={s}
+                  sessions={sessions}
+                  dayNumber={dayByInstance.get(s.workoutInstanceId) ?? null}
+                  muscleOf={muscleOf}
+                  divider={i > 0}
+                  onPress={() => navigation.navigate('PastSession', { workoutInstanceId: s.workoutInstanceId })}
+                />
+              ))}
+            </View>
+          )}
+        </Card>
+      ) : null}
+
+      <Button label="Log something off-plan" variant="dashed" icon={<PlusGlyph />} onPress={() => setOffPlanOpen(true)} full />
+
+      <OffPlanSheet
+        visible={offPlanOpen}
+        onClose={() => setOffPlanOpen(false)}
+        sessions={sessions}
+        onStarted={(id) => {
+          setOffPlanOpen(false);
+          navigation.navigate('WorkoutDetail', { workoutInstanceId: id });
+        }}
+      />
+    </Screen>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#1a1a1a',
+  streak: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingVertical: 6,
+    paddingHorizontal: 11,
+    borderRadius: radius.field,
+    backgroundColor: colors.success.pillBg,
+    borderWidth: 1,
+    borderColor: colors.success.pillBorder,
   },
-  scrollView: {
-    flex: 1,
+  streakText: {
+    ...type.metaSmall,
+    fontWeight: '600',
+    color: colors.success.pillText,
   },
-  contentContainer: {
-    padding: 8,
-    paddingBottom: 88,
-  },
-  cardsGrid: {
+  hits: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.md,
-    marginBottom: spacing.md,
+    justifyContent: 'space-between',
+    rowGap: 10,
+    columnGap: 14,
   },
-  header: {
-    marginBottom: 20,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#fff',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#1a1a1a',
-  },
-  errorText: {
-    color: '#ff4444',
-    fontSize: 16,
-    textAlign: 'center',
-    padding: 20,
-  },
-  card: {
-    backgroundColor: '#2a2a2a',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  cardText: {
-    color: '#fff',
-    fontSize: 16,
-  },
-  nextWorkoutHeader: {
-    backgroundColor: '#1a1a1a',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-  },
-  nextWorkoutContent: {
+  hit: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-  },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  avatarText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  nextWorkoutInfo: {
-    flex: 1,
-  },
-  nextWorkoutTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#fff',
-  },
-  nextWorkoutSubtitle: {
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.6)',
-    marginTop: 2,
-  },
-  playButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  workoutButton: {
-    backgroundColor: themeColors.primary.main,
-  },
-  restButton: {
-    backgroundColor: '#2196F3',
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  emptyStateContainer: {
-    alignItems: 'center',
-    paddingVertical: 8,
-  },
-  emptyStateTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#fff',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  emptyStateSubtitle: {
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.6)',
-    textAlign: 'center',
-    marginBottom: 20,
-    paddingHorizontal: 20,
-  },
-  emptyStateButtons: {
-    width: '100%',
-    gap: 12,
-    paddingHorizontal: 20,
-  },
-  emptyStateButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderRadius: 8,
     gap: 8,
   },
-  primaryButton: {
-    backgroundColor: themeColors.primary.main,
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: radius.round,
   },
-  secondaryButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-  },
-  emptyStateButtonText: {
-    color: '#fff',
-    fontSize: 16,
+  hitName: {
+    ...type.metaSmall,
+    fontSize: size.metaMid,
     fontWeight: '600',
+    color: colors.text.body,
+  },
+  hitSince: {
+    ...type.metaSmall,
+    fontSize: size.label,
+    color: colors.text.muted,
   },
 });

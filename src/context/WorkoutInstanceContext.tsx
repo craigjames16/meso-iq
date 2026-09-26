@@ -1,8 +1,7 @@
 import React, { createContext, useState, useCallback, useContext, useRef, useEffect } from 'react';
 import { workoutService } from '../services/workoutService';
 import { exercisesService, type ExerciseDetailResponse } from '../services/exercisesService';
-import type { HistoryInstance } from '../components/ExerciseHistoryModal';
-import type { ExerciseTracking } from '../components/ExerciseTrackingCard';
+import type { ExerciseTracking, HistoryInstance } from '../components/logger/types';
 import {
   resolveWorkoutTrackings,
   buildExerciseTrackingForWorkoutExercise,

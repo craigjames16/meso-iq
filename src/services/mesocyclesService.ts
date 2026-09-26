@@ -29,7 +29,7 @@ export const mesocyclesService = {
     }
   },
 
-  async createMesocycle(data: { name: string; planId: string; iterations: number }): Promise<MesocycleListItem> {
+  async createMesocycle(data: { name: string; planId: string; iterations: number; startDate?: string }): Promise<MesocycleListItem> {
     try {
       const response = await apiClient.post<MesocycleListItem>(API_ENDPOINTS.MESOCYCLES.LIST, data);
       return response;

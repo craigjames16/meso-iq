@@ -1,401 +1,288 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  ActivityIndicator,
-} from 'react-native';
-import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
+import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import Svg, { Circle, Path } from 'react-native-svg';
 import type { RootStackParamList } from '../../navigation/AppNavigator';
 import { workoutService } from '../../services/workoutService';
-import { dashboardService } from '../../services/dashboardService';
+import { useSchedule } from '../../context/ScheduleContext';
 import type { WorkoutInstance } from '../../types/workout';
-import type { MesocycleProgressData, PlanDay } from '../../types/mesocycle';
 import {
-  getVolumeForInstance,
-  getExerciseVolumeBreakdown,
-  type ExerciseVolumeRow,
-} from '../../utils/workoutVolume';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { themeColors, spacing, borderRadius } from '../../theme/colors';
+  e1rm,
+  sessionFromInstance,
+  sessionPRs,
+  sessionTotals,
+  tonnageDeltaVsLast,
+  topSet,
+  type SessionPR,
+} from '../../analytics';
+import { useTrainingHistory } from '../../hooks/useTrainingHistory';
+import { useCycleStats } from '../../hooks/useCycleStats';
+import { loadExerciseHistory, type ExerciseHistory } from '../../hooks/exerciseSessions';
+import { runLimited } from '../../hooks/cache';
+import {
+  Button,
+  Card,
+  DeltaText,
+  ErrorState,
+  ListRow,
+  Screen,
+  SectionLabel,
+  Skeleton,
+  StatRow,
+  StatTile,
+  deltaColor,
+} from '../../components/ui';
+import { planContext, sessionName } from '../../components/session/sessionText';
+import { colors, radius, space, type, size } from '../../theme';
+import { formatNumber, formatPercentDelta, formatSigned, formatWeight } from '../../utils/format';
+import { workoutDisplayName } from '../../utils/names';
 
 type Route = RouteProp<RootStackParamList, 'WorkoutComplete'>;
 type Nav = NativeStackNavigationProp<RootStackParamList, 'WorkoutComplete'>;
 
-function countCompletedWorkoutDays(planDays: PlanDay[]): number {
-  let n = 0;
-  for (const day of planDays) {
-    if (day.isRestDay) continue;
-    const done = day.iterations.some((it) => it.completedAt != null);
-    if (done) n += 1;
-  }
-  return n;
-}
+const DoneBadge = () => (
+  <Svg width={40} height={40} viewBox="0 0 40 40" fill="none">
+    <Circle cx={20} cy={20} r={19} fill={colors.success.pillBg} stroke={colors.success.pillBorder} strokeWidth={1} />
+    <Path d="M12.5 20.5 17.5 25.5 27.5 14.5" stroke={colors.success.base} strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" />
+  </Svg>
+);
 
-function countWorkoutDays(planDays: PlanDay[]): number {
-  return planDays.filter((d) => !d.isRestDay).length;
-}
+const PRGlyph = () => (
+  <Svg width={18} height={18} viewBox="0 0 18 18" fill="none">
+    <Path
+      d="M9 2.2 11 6.3l4.5.6-3.3 3.1.8 4.4L9 12.3l-4 2.1.8-4.4L2.5 6.9 7 6.3 9 2.2Z"
+      stroke={colors.data.main}
+      strokeWidth={1.4}
+      strokeLinejoin="round"
+    />
+  </Svg>
+);
 
 export const WorkoutCompleteScreen: React.FC = () => {
   const { params } = useRoute<Route>();
   const navigation = useNavigation<Nav>();
-  const insets = useSafeAreaInsets();
-  const { workoutInstanceId } = params;
-
+  const { schedule } = useSchedule();
+  const history = useTrainingHistory();
   const [instance, setInstance] = useState<WorkoutInstance | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  const [mesoProgress, setMesoProgress] = useState<MesocycleProgressData | null>(null);
-  const [mesoError, setMesoError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [histories, setHistories] = useState<ExerciseHistory[] | null>(null);
 
   const load = useCallback(async () => {
-    setLoading(true);
-    setLoadError(null);
-    setMesoProgress(null);
-    setMesoError(null);
+    setError(null);
     try {
-      const data = (await workoutService.getWorkoutInstance(
-        workoutInstanceId
-      )) as WorkoutInstance;
+      const data = (await workoutService.getWorkoutInstance(params.workoutInstanceId)) as WorkoutInstance;
       setInstance(data);
-
-      const mesoId =
-        data.planInstanceDays?.[0]?.planInstance?.mesocycle?.id ?? null;
-      if (mesoId != null) {
-        try {
-          const progress = await dashboardService.getMesocycleProgress(mesoId);
-          setMesoProgress(progress);
-        } catch (e) {
-          console.error('Mesocycle progress fetch failed:', e);
-          setMesoError(
-            e instanceof Error ? e.message : 'Mesocycle data unavailable'
-          );
-        }
-      }
-    } catch (e) {
-      console.error('Workout instance fetch failed:', e);
-      setLoadError(
-        e instanceof Error ? e.message : 'Failed to load workout summary'
-      );
-      setInstance(null);
-    } finally {
-      setLoading(false);
+      const ids = [...new Set((data.workoutExercises ?? []).map((we) => we.exerciseId))];
+      const results = await runLimited(ids.map((id) => () => loadExerciseHistory(id, true)), 4);
+      setHistories(results.filter((r): r is ExerciseHistory => !!r));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't load this.");
     }
-  }, [workoutInstanceId]);
+  }, [params.workoutInstanceId]);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  const handleDone = () => {
-    navigation.navigate('Main', { screen: 'Track' });
+  const session = useMemo(() => (instance ? sessionFromInstance(instance) : null), [instance]);
+  const dayNumber = instance?.planInstanceDays?.[0]?.planDay?.dayNumber ?? null;
+  const mesocycleId = session?.planned ? session.mesocycleId ?? null : null;
+  const cycle = useCycleStats(mesocycleId);
+
+  const { muscleOf, sessions } = history.data;
+  const name = session ? sessionName(session, muscleOf, dayNumber) : instance?.workout?.name ?? 'Workout';
+  const totals = session ? sessionTotals(session) : null;
+  // History may not include this session yet; compare against it either way.
+  const allSessions = useMemo(
+    () => (session && !sessions.some((s) => s.workoutInstanceId === session.workoutInstanceId) ? [...sessions, session] : sessions),
+    [sessions, session],
+  );
+  const delta = session ? tonnageDeltaVsLast(session, allSessions) : null;
+
+  const prs: SessionPR[] = useMemo(
+    () => (session && histories ? sessionPRs(session, histories.map((h) => h.sessions)) : []),
+    [session, histories],
+  );
+
+  const exerciseRows = useMemo(() => {
+    if (!session) return [];
+    const ids = [...(session.exerciseOrder ?? [])];
+    for (const s of session.sets) if (!ids.includes(s.exerciseId)) ids.push(s.exerciseId);
+    const t = new Date(session.completedAt).getTime();
+    return ids
+      .map((id) => {
+        const top = topSet(session.sets.filter((s) => s.exerciseId === id));
+        const h = histories?.find((x) => x.id === id);
+        const prev = h?.sessions
+          .filter((s) => s.workoutInstanceId !== session.workoutInstanceId && new Date(s.completedAt).getTime() < t)
+          .map((s) => topSet(s.sets))
+          .filter(Boolean)
+          .pop();
+        const change = top && prev ? (e1rm(top.weight, top.reps) - e1rm(prev.weight, prev.reps)) / e1rm(prev.weight, prev.reps) : null;
+        return { id, name: session.exerciseNames?.[id] ?? h?.name ?? 'Exercise', top, change };
+      })
+      .filter((r) => r.top || session.sets.some((s) => s.exerciseId === r.id));
+  }, [session, histories]);
+
+  const week = cycle.data.weeks.find((w) => w.iteration === session?.iteration);
+  const weekTraining = week?.days.filter((d) => !d.isRestDay) ?? [];
+  const weekDone = weekTraining.filter((d) => d.state === 'done' || d.workoutInstanceId === session?.workoutInstanceId).length;
+  const next = (schedule?.upcomingDays ?? [])[0] as any;
+  const nextLabel = next
+    ? next.planDay?.isRestDay
+      ? 'Rest day'
+      : workoutDisplayName(
+          next.planDay?.workout?.name,
+          (next.planDay?.workout?.workoutExercises ?? []).map((we: any) => we.exercise?.category),
+          next.planDay?.dayNumber,
+        )
+    : null;
+
+  const prText = (pr: SessionPR) => {
+    if (pr.kind === 'e1rm') {
+      return `Est. 1RM ${formatNumber(pr.value)} lb${pr.delta != null ? ` · ${formatSigned(pr.delta)} lb` : ''}`;
+    }
+    return `Most reps at ${formatWeight(pr.weight ?? 0)} lb · ${pr.value}`;
   };
 
-  const subtitle = (() => {
-    if (!instance) return null;
-    const planDay = instance.planInstanceDays?.[0]?.planDay;
-    const planInstance = instance.planInstanceDays?.[0]?.planInstance;
-    const week = planInstance?.iterationNumber;
-    const day = planDay?.dayNumber;
-    if (typeof week === 'number' && typeof day === 'number') {
-      return `Week ${week} · Day ${day}`;
-    }
-    return instance.workout?.name ?? null;
-  })();
-
-  const totalVolume = instance ? getVolumeForInstance(instance) : 0;
-  const exerciseRows: ExerciseVolumeRow[] = instance
-    ? getExerciseVolumeBreakdown(instance)
-    : [];
-
-  const planInstance = instance?.planInstanceDays?.[0]?.planInstance;
-  const mesoFromInstance = planInstance?.mesocycle;
-  const currentWeek = planInstance?.iterationNumber ?? null;
-  const totalWeeks =
-    mesoProgress?.iterationVolumes && mesoProgress.iterationVolumes.length > 0
-      ? Math.max(
-          ...mesoProgress.iterationVolumes.map((v) => v.iterationNumber)
-        )
-      : null;
-
-  const workoutDaysTotal = mesoProgress?.planDays
-    ? countWorkoutDays(mesoProgress.planDays)
-    : null;
-  const workoutDaysDone = mesoProgress?.planDays
-    ? countCompletedWorkoutDays(mesoProgress.planDays)
-    : null;
+  const goToday = () => navigation.navigate('Main', { screen: 'Track' });
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top }]}>
-      {loading ? (
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color={themeColors.primary.main} />
-          <Text style={styles.muted}>Loading summary…</Text>
-        </View>
-      ) : loadError && !instance ? (
-        <View style={styles.centered}>
-          <Text style={styles.errorText}>{loadError}</Text>
-          <TouchableOpacity onPress={load} style={styles.retryBtn}>
-            <Text style={styles.retryBtnText}>Retry</Text>
-          </TouchableOpacity>
-        </View>
-      ) : (
-        <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          <Text style={styles.headline}>Workout complete</Text>
-          {subtitle ? (
-            <Text style={styles.subtitle}>{subtitle}</Text>
-          ) : null}
+    <Screen bottom="none">
+      <View style={styles.header}>
+        <DoneBadge />
+        <Text style={styles.title} accessibilityRole="header">
+          Workout complete
+        </Text>
+        {session ? <Text style={styles.meta}>{[name, planContext(session, dayNumber)].join(' · ')}</Text> : null}
+      </View>
 
-          <View style={[styles.exerciseCard, styles.volumeCard]}>
-            <View style={styles.exerciseCardInner}>
-              <Text style={styles.volumeValue}>
-                {Math.round(totalVolume).toLocaleString()}
-              </Text>
-              <Text style={styles.volumeUnit}>lbs total volume</Text>
+      {error && !instance ? (
+        <ErrorState onRetry={load} />
+      ) : !session || !totals ? (
+        <>
+          <Skeleton height={70} />
+          <Skeleton height={150} />
+        </>
+      ) : (
+        <>
+          <StatRow>
+            <StatTile label="Sets" value={String(totals.hardSets)} />
+            <StatTile label="lb lifted" value={formatNumber(totals.tonnage)} />
+            <StatTile
+              label={delta != null ? `vs last ${name}` : `First ${name}`}
+              value={delta != null ? formatPercentDelta(delta) : '—'}
+              valueColor={delta != null ? deltaColor(delta) : colors.text.muted}
+            />
+          </StatRow>
+
+          {prs.length > 0 ? (
+            <View style={styles.section}>
+              <SectionLabel>PERSONAL RECORDS</SectionLabel>
+              <Card gap={0}>
+                {prs.map((pr, i) => (
+                  <ListRow
+                    key={`${pr.exerciseId}-${pr.kind}`}
+                    title={session.exerciseNames?.[pr.exerciseId] ?? 'Exercise'}
+                    meta={prText(pr)}
+                    right={<PRGlyph />}
+                    divider={i > 0}
+                  />
+                ))}
+              </Card>
             </View>
-          </View>
+          ) : null}
 
           {exerciseRows.length > 0 ? (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Exercises</Text>
-              {exerciseRows.map((row, index) => (
-                <View
-                  key={`${row.exerciseId}-${index}`}
-                  style={styles.exerciseCard}
-                >
-                  <View style={styles.exerciseCardInnerRow}>
-                    <View style={styles.exerciseRowMain}>
-                      <Text style={styles.recapExerciseName} numberOfLines={2}>
-                        {row.exerciseName}
-                      </Text>
-                      <Text style={styles.exerciseMeta}>
-                        {row.setCount} set{row.setCount !== 1 ? 's' : ''}
-                      </Text>
-                    </View>
-                    <Text style={styles.exerciseVolume}>
-                      {Math.round(row.volume).toLocaleString()} lbs
-                    </Text>
-                  </View>
-                </View>
-              ))}
+              <SectionLabel>EXERCISE BY EXERCISE</SectionLabel>
+              <Card gap={0}>
+                {exerciseRows.map((r, i) => (
+                  <ListRow
+                    key={r.id}
+                    title={r.name}
+                    meta={r.top ? `Top set ${formatWeight(r.top.weight)} × ${r.top.reps}` : 'No working sets'}
+                    right={histories == null ? <Skeleton height={14} width={40} rounded="field" /> : <DeltaText value={r.change} />}
+                    divider={i > 0}
+                  />
+                ))}
+              </Card>
             </View>
           ) : null}
 
-          {(mesoFromInstance || mesoProgress || mesoError) && (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Mesocycle</Text>
-              <View style={styles.exerciseCard}>
-                <View style={styles.exerciseCardInnerLeft}>
-                  {mesoError && !mesoProgress ? (
-                    <Text style={styles.mesoMuted}>{mesoError}</Text>
-                  ) : (
-                    <>
-                      <Text style={styles.mesoName}>
-                        {mesoProgress?.name ?? mesoFromInstance?.name ?? '—'}
-                      </Text>
-                      {mesoProgress?.plan?.name ? (
-                        <Text style={styles.mesoPlan}>{mesoProgress.plan.name}</Text>
-                      ) : null}
-                      {currentWeek != null && totalWeeks != null ? (
-                        <Text style={styles.mesoLine}>
-                          Week {currentWeek} of {totalWeeks}
-                        </Text>
-                      ) : null}
-                      {workoutDaysTotal != null && workoutDaysDone != null ? (
-                        <Text style={styles.mesoLine}>
-                          {workoutDaysDone} / {workoutDaysTotal} workout days
-                          completed
-                        </Text>
-                      ) : null}
-                    </>
-                  )}
-                </View>
+          {session.planned && week ? (
+            <Card gap={10}>
+              <View style={styles.cycleHead}>
+                <SectionLabel>THIS CYCLE</SectionLabel>
+                <Text style={styles.cycleCount}>
+                  Week {week.iteration} · {weekDone} of {weekTraining.length} days
+                </Text>
               </View>
-            </View>
-          )}
-        </ScrollView>
+              <View style={styles.segments}>
+                {weekTraining.map((d) => (
+                  <View
+                    key={d.dayNumber}
+                    style={[
+                      styles.segment,
+                      (d.state === 'done' || d.workoutInstanceId === session.workoutInstanceId) && styles.segmentDone,
+                    ]}
+                  />
+                ))}
+              </View>
+              {nextLabel ? <Text style={styles.next}>Next: {nextLabel}</Text> : null}
+            </Card>
+          ) : null}
+        </>
       )}
 
-      <View style={[styles.footer, { paddingBottom: spacing.xl + insets.bottom }]}>
-        <TouchableOpacity
-          style={styles.doneButton}
-          onPress={handleDone}
-          activeOpacity={0.85}
-        >
-          <Text style={styles.doneButtonText}>Done</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
+      <Button label="Done" onPress={goToday} full />
+    </Screen>
   );
 };
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: themeColors.background.primary,
+  header: {
+    gap: 6,
+    paddingTop: space.screenTop,
   },
-  scroll: {
-    flex: 1,
+  title: {
+    ...type.detailTitle,
+    color: colors.text.primary,
+    marginTop: 6,
   },
-  scrollContent: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.xl,
-    paddingBottom: spacing.xl,
+  meta: {
+    ...type.meta,
+    color: colors.text.muted,
   },
-  centered: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: spacing.lg,
-    gap: spacing.md,
+  section: {
+    gap: 8,
   },
-  headline: {
-    color: themeColors.text.primary,
-    fontSize: 28,
-    fontWeight: '700',
-    marginBottom: spacing.xs,
-  },
-  subtitle: {
-    color: themeColors.text.secondary,
-    fontSize: 16,
-    marginBottom: spacing.lg,
-  },
-  muted: {
-    color: themeColors.text.muted,
-    fontSize: 15,
-    marginTop: spacing.sm,
-  },
-  /** Matches ExerciseTrackingCard `exerciseCard` container */
-  exerciseCard: {
-    marginBottom: spacing.sm,
-    marginHorizontal: spacing.xs,
-    borderRadius: borderRadius.sm,
-    paddingVertical: spacing.md,
-    borderWidth: 1,
-    borderColor: themeColors.border.default,
-  },
-  exerciseCardInner: {
-    paddingHorizontal: spacing.md,
-    alignItems: 'center',
-    alignSelf: 'stretch',
-  },
-  exerciseCardInnerLeft: {
-    paddingHorizontal: spacing.md,
-    alignSelf: 'stretch',
-  },
-  exerciseCardInnerRow: {
-    paddingHorizontal: spacing.md,
+  cycleHead: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  volumeCard: {
-    marginBottom: spacing.xl,
+  cycleCount: {
+    ...type.metaSmall,
+    fontSize: size.metaMid,
+    color: colors.text.secondary,
   },
-  volumeValue: {
-    color: themeColors.primary.light,
-    fontSize: 44,
-    fontWeight: '700',
+  segments: {
+    flexDirection: 'row',
+    gap: 4,
   },
-  volumeUnit: {
-    color: themeColors.text.secondary,
-    fontSize: 15,
-    marginTop: spacing.xs,
-  },
-  section: {
-    marginBottom: spacing.lg,
-  },
-  sectionTitle: {
-    color: themeColors.text.secondary,
-    fontSize: 13,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-    marginBottom: spacing.sm,
-  },
-  exerciseRowMain: {
+  segment: {
     flex: 1,
-    marginRight: spacing.md,
+    height: 6,
+    borderRadius: radius.cell,
+    backgroundColor: colors.border.track,
   },
-  recapExerciseName: {
-    color: themeColors.text.primary,
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 4,
+  segmentDone: {
+    backgroundColor: colors.success.base,
   },
-  exerciseMeta: {
-    color: themeColors.text.muted,
-    fontSize: 13,
-    fontWeight: '500',
-    marginTop: 2,
-  },
-  exerciseVolume: {
-    color: themeColors.text.primary,
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  mesoName: {
-    color: themeColors.text.primary,
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  mesoPlan: {
-    color: themeColors.text.secondary,
-    fontSize: 14,
-    marginTop: 4,
-  },
-  mesoLine: {
-    color: themeColors.text.secondary,
-    fontSize: 14,
-    marginTop: spacing.sm,
-  },
-  mesoMuted: {
-    color: themeColors.text.muted,
-    fontSize: 14,
-  },
-  errorText: {
-    color: themeColors.accent.error,
-    fontSize: 15,
-    textAlign: 'center',
-  },
-  retryBtn: {
-    marginTop: spacing.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    backgroundColor: themeColors.primary.main,
-    borderRadius: borderRadius.md,
-  },
-  retryBtnText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 16,
-  },
-  footer: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.xl,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: themeColors.border.default,
-    backgroundColor: themeColors.background.primary,
-  },
-  doneButton: {
-    backgroundColor: themeColors.primary.main,
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.md,
-    alignItems: 'center',
-  },
-  doneButtonText: {
-    color: '#fff',
-    fontSize: 17,
-    fontWeight: '600',
+  next: {
+    ...type.meta,
+    color: colors.text.secondary,
   },
 });

@@ -10,23 +10,28 @@ import { AuthNavigator } from './AuthNavigator';
 import { MainNavigator, type MainTabParamList } from './MainNavigator';
 import { WorkoutDetailScreen } from '../screens/workout/WorkoutDetailScreen';
 import { WorkoutCompleteScreen } from '../screens/workout/WorkoutCompleteScreen';
+import { PastSessionScreen } from '../screens/workout/PastSessionScreen';
 import { AccountSettingsScreen } from '../screens/main/AccountSettingsScreen';
 import { PlanDetailScreen } from '../screens/plan/PlanDetailScreen';
 import { EditPlanScreen } from '../screens/plan/EditPlanScreen';
 import { MesocycleDetailScreen } from '../screens/mesocycle/MesocycleDetailScreen';
 import { HeatmapScreen } from '../screens/main/HeatmapScreen';
 import { ExerciseDetailScreen } from '../screens/exercise/ExerciseDetailScreen';
+import { StyleGuideScreen } from '../screens/dev/StyleGuideScreen';
+import { colors } from '../theme';
 
 export type RootStackParamList = {
   Main: NavigatorScreenParams<MainTabParamList>;
   WorkoutDetail: { workoutInstanceId: number };
   WorkoutComplete: { workoutInstanceId: number };
+  PastSession: { workoutInstanceId: number };
   AccountSettings: undefined;
   PlanDetail: { planId: number };
-  EditPlan: { planId: number };
+  EditPlan: { planId?: number; draftFromAI?: boolean };
   MesocycleDetail: { mesocycleId: number };
-  Heatmap: { mesocycleId: number | null };
+  Heatmap: { year: number };
   ExerciseDetail: { exerciseId: number };
+  StyleGuide: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -37,7 +42,7 @@ export const AppNavigator: React.FC = () => {
   if (isHydrating) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
+        <ActivityIndicator size="large" color={colors.text.primary} />
       </View>
     );
   }
@@ -49,21 +54,11 @@ export const AppNavigator: React.FC = () => {
           screenOptions={{
             headerShown: false,
             headerBackButtonDisplayMode: 'minimal',
-            contentStyle: { backgroundColor: '#1a1a1a' },
+            contentStyle: { backgroundColor: colors.bg },
           }}
         >
           <Stack.Screen name="Main" component={MainNavigator} />
-          <Stack.Screen 
-            name="WorkoutDetail" 
-            component={WorkoutDetailScreen}
-            options={{
-              headerShown: true,
-              headerStyle: { backgroundColor: '#1a1a1a' },
-              headerTintColor: '#fff',
-              headerTitleStyle: { fontWeight: 'bold' },
-              title: 'Workout', // fallback until screen sets Week X - Day Y
-            }}
-          />
+          <Stack.Screen name="WorkoutDetail" component={WorkoutDetailScreen} />
           <Stack.Screen
             name="WorkoutComplete"
             component={WorkoutCompleteScreen}
@@ -72,72 +67,14 @@ export const AppNavigator: React.FC = () => {
               gestureEnabled: false,
             }}
           />
-          <Stack.Screen 
-            name="AccountSettings" 
-            component={AccountSettingsScreen}
-            options={{
-              headerShown: true,
-              headerStyle: { backgroundColor: '#1a1a1a' },
-              headerTintColor: '#fff',
-              headerTitleStyle: { fontWeight: 'bold' },
-              title: 'Account Settings',
-            }}
-          />
-          <Stack.Screen 
-            name="PlanDetail" 
-            component={PlanDetailScreen}
-            options={{
-              headerShown: true,
-              headerStyle: { backgroundColor: '#1a1a1a' },
-              headerTintColor: '#fff',
-              headerTitleStyle: { fontWeight: 'bold' },
-              title: 'Plan Details',
-            }}
-          />
-          <Stack.Screen 
-            name="EditPlan" 
-            component={EditPlanScreen}
-            options={{
-              headerShown: true,
-              headerStyle: { backgroundColor: '#1a1a1a' },
-              headerTintColor: '#fff',
-              headerTitleStyle: { fontWeight: 'bold' },
-              title: 'Edit Plan',
-            }}
-          />
-          <Stack.Screen 
-            name="MesocycleDetail" 
-            component={MesocycleDetailScreen}
-            options={{
-              headerShown: true,
-              headerStyle: { backgroundColor: '#1a1a1a' },
-              headerTintColor: '#fff',
-              headerTitleStyle: { fontWeight: 'bold' },
-              title: 'Mesocycle Details',
-            }}
-          />
-          <Stack.Screen 
-            name="Heatmap" 
-            component={HeatmapScreen}
-            options={{
-              headerShown: true,
-              headerStyle: { backgroundColor: '#1a1a1a' },
-              headerTintColor: '#fff',
-              headerTitleStyle: { fontWeight: 'bold' },
-              title: 'Workout Heatmap',
-            }}
-          />
-          <Stack.Screen 
-            name="ExerciseDetail" 
-            component={ExerciseDetailScreen}
-            options={{
-              headerShown: true,
-              headerStyle: { backgroundColor: '#1a1a1a' },
-              headerTintColor: '#fff',
-              headerTitleStyle: { fontWeight: 'bold' },
-              title: 'Exercise Details',
-            }}
-          />
+          <Stack.Screen name="PastSession" component={PastSessionScreen} />
+          <Stack.Screen name="AccountSettings" component={AccountSettingsScreen} />
+          <Stack.Screen name="PlanDetail" component={PlanDetailScreen} />
+          <Stack.Screen name="EditPlan" component={EditPlanScreen} />
+          <Stack.Screen name="MesocycleDetail" component={MesocycleDetailScreen} />
+          <Stack.Screen name="Heatmap" component={HeatmapScreen} />
+          <Stack.Screen name="ExerciseDetail" component={ExerciseDetailScreen} />
+          {__DEV__ ? <Stack.Screen name="StyleGuide" component={StyleGuideScreen} /> : null}
         </Stack.Navigator>
       ) : (
         <AuthNavigator />
@@ -151,7 +88,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#1a1a1a',
+    backgroundColor: colors.bg,
   },
 });
 

@@ -2,6 +2,7 @@ import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SignInScreen } from '../screens/auth/SignInScreen';
 import { SignUpScreen } from '../screens/auth/SignUpScreen';
+import { colors } from '../theme';
 
 export type AuthStackParamList = {
   SignIn: undefined;
@@ -15,7 +16,7 @@ export const AuthNavigator: React.FC = () => {
     <Stack.Navigator
       screenOptions={{
         headerShown: false,
-        contentStyle: { backgroundColor: '#1a1a1a' },
+        contentStyle: { backgroundColor: colors.bg },
       }}
     >
       <Stack.Screen name="SignIn" component={SignInScreen} />
