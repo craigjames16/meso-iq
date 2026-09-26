@@ -8,6 +8,26 @@ interface GlyphProps {
   strokeWidth?: number;
 }
 
+/**
+ * The MesoIQ mark: three logged blocks in signal orange, then the next one,
+ * higher, in the reference grey. Brand only — it carries no state.
+ */
+export const LogoMark: React.FC<{ size?: number }> = ({ size = 18 }) => (
+  <Svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    accessibilityRole="image"
+    accessibilityLabel="MesoIQ"
+  >
+    <Rect x={1.5} y={14} width={4} height={8} rx={1.3} fill={colors.data.main} />
+    <Rect x={7} y={10} width={4} height={12} rx={1.3} fill={colors.data.main} />
+    <Rect x={12.5} y={6} width={4} height={16} rx={1.3} fill={colors.data.main} />
+    <Rect x={18} y={2} width={4} height={20} rx={1.3} fill={colors.data.reference} />
+  </Svg>
+);
+
 export const PlayGlyph: React.FC<GlyphProps> = ({ size = 22, color = colors.action.onFill }) => (
   <Svg width={size} height={size} viewBox="0 0 22 22" fill="none">
     <Path d="M7.5 4.6 17 11l-9.5 6.4V4.6Z" fill={color} />
@@ -55,6 +75,14 @@ export const CloseGlyph: React.FC<GlyphProps> = ({ size = 14, color = colors.tex
 export const PlusGlyph: React.FC<GlyphProps> = ({ size = 15, color = colors.text.secondary, strokeWidth = 1.7 }) => (
   <Svg width={size} height={size} viewBox="0 0 16 16" fill="none">
     <Path d="M8 3.2v9.6M3.2 8h9.6" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" />
+  </Svg>
+);
+
+export const InfoGlyph: React.FC<GlyphProps> = ({ size = 15, color = colors.text.faint, strokeWidth = 1.5 }) => (
+  <Svg width={size} height={size} viewBox="0 0 16 16" fill="none">
+    <Circle cx={8} cy={8} r={6.2} stroke={color} strokeWidth={strokeWidth} />
+    <Path d="M8 7.2v4" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" />
+    <Circle cx={8} cy={4.9} r={0.8} fill={color} />
   </Svg>
 );
 

@@ -192,11 +192,11 @@ export const StyleGuideScreen: React.FC = () => {
 
       <Section title="Charts">
         <Card>
-          <CardTitle title="Hard sets this week" subtitle="Sets, not tonnage, comparable across muscles" />
+          <CardTitle title="Working sets this week" subtitle="Sets, not volume, comparable across muscles" info="hardSets" />
           <BarRowSample />
         </Card>
         <Card>
-          <CardTitle title="Est. 1RM" subtitle="LineChart with trend and PR rings" />
+          <CardTitle title="Est. 1RM" subtitle="LineChart with trend and PR rings" info="e1rm" />
           <LineChart
             points={e1rmSample}
             trend={{ slope: (212 - 168) / (17 * 7 * DAY), intercept: 168 }}
@@ -213,11 +213,11 @@ export const StyleGuideScreen: React.FC = () => {
           />
         </Card>
         <Card>
-          <CardTitle title="Strength trend" />
+          <CardTitle title="Strength trend" info="strengthTrend" />
           <ListRow title="Machine Chest Press" right={<Sparkline values={[180, 186, 191, 200, 212]} />} value="212" delta={0.073} />
         </Card>
         <Card>
-          <CardTitle title="Tonnage per month" subtitle="VerticalBars with a dashed average" />
+          <CardTitle title="Volume per month" subtitle="VerticalBars with a dashed average" info="tonnage" />
           <VerticalBars
             bars={['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP'].map((label, i) => ({
               label,
@@ -231,11 +231,11 @@ export const StyleGuideScreen: React.FC = () => {
           />
         </Card>
         <Card>
-          <CardTitle title="Consistency" subtitle="HeatGrid, 26 weeks" />
+          <CardTitle title="Consistency" subtitle="HeatGrid, 26 weeks" info="consistency" />
           <HeatGrid weeks={heatWeeks} />
         </Card>
         <Card>
-          <CardTitle title="Where you actually train" subtitle="Matrix" />
+          <CardTitle title="Where you actually train" subtitle="Matrix" info="weightRepMatrix" />
           <Matrix
             rows={['225', '205', '185', '165']}
             cols={['≤4', '5–6', '7–8', '9–10', '11–12', '13+']}
@@ -254,7 +254,7 @@ export const StyleGuideScreen: React.FC = () => {
           />
         </Card>
         <Card>
-          <CardTitle title="This cycle vs. last" subtitle="Radar" />
+          <CardTitle title="This cycle vs. last" subtitle="Radar" info="cycleRadar" />
           <Radar
             axes={['CHEST', 'TRICEPS', 'BICEPS', 'HAMS', 'QUADS', 'BACK']}
             current={[0.7, 0.55, 0.45, 0.4, 0.75, 0.85]}
@@ -262,7 +262,7 @@ export const StyleGuideScreen: React.FC = () => {
           />
         </Card>
         <Card>
-          <CardTitle title="Starting sets per muscle" subtitle="ProfileBars" />
+          <CardTitle title="Starting sets per muscle" subtitle="ProfileBars" info="volumeProfile" />
           <ProfileBars
             bars={[
               { label: 'CHT', value: 8 },

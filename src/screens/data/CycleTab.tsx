@@ -115,7 +115,7 @@ export const CycleTab: React.FC<CycleTabProps> = ({ mesocycleId, hasCycles, onGo
         tone="success"
         icon={<TrendGlyph size={18} color={colors.success.base} />}
         title={`${label} is your fastest riser`}
-        body={`${formatPercentDelta(riser.rate)} est. 1RM per week across ${riser.exerciseCount} ${label.toLowerCase()} ${riser.exerciseCount === 1 ? 'lift' : 'lifts'}, best of any muscle this cycle.`}
+        body={`${formatPercentDelta(riser.rate)} est. 1RM per week across ${riser.exerciseCount} ${label.toLowerCase()} ${riser.exerciseCount === 1 ? 'exercise' : 'exercises'}, best of any muscle this cycle.`}
       />,
     );
   }
@@ -158,9 +158,9 @@ export const CycleTab: React.FC<CycleTabProps> = ({ mesocycleId, hasCycles, onGo
       ) : null}
 
       <Card padding={16} gap={14}>
-        <CardTitle title="Hard sets this week" subtitle="Sets, not tonnage, comparable across muscles" />
+        <CardTitle title="Working sets this week" subtitle="Sets, not volume, comparable across muscles" info="hardSets" />
         {thisWeek.rows.length === 0 ? (
-          <Text style={styles.empty}>No hard sets logged this week yet.</Text>
+          <Text style={styles.empty}>No working sets logged this week yet.</Text>
         ) : (
           <View style={styles.bars}>
             {thisWeek.rows.map((r) => (
@@ -173,7 +173,7 @@ export const CycleTab: React.FC<CycleTabProps> = ({ mesocycleId, hasCycles, onGo
                 tick={r.avg}
                 delta={countDelta(r.count, r.avg)}
                 onPress={() => setBarMuscle(r.muscle)}
-                accessibilityLabel={`${muscleLabel(r.muscle)}: ${r.count} hard sets, 4-week average ${r.avg.toFixed(1)}`}
+                accessibilityLabel={`${muscleLabel(r.muscle)}: ${r.count} working sets, 4-week average ${r.avg.toFixed(1)}`}
               />
             ))}
           </View>
@@ -188,6 +188,7 @@ export const CycleTab: React.FC<CycleTabProps> = ({ mesocycleId, hasCycles, onGo
         <CardTitle
           title="Strength trend"
           subtitle="Est. 1RM, this mesocycle"
+          info="strengthTrend"
           action={
             d.strength.length > TREND_ROWS
               ? { label: showAllTrend ? 'Top 5' : `All ${d.strength.length}`, onPress: () => setShowAllTrend((v) => !v) }
@@ -219,7 +220,7 @@ export const CycleTab: React.FC<CycleTabProps> = ({ mesocycleId, hasCycles, onGo
 
       {d.radar && d.radar.axes.length >= 3 && d.previous ? (
         <Card padding={16} gap={10}>
-          <CardTitle title="This cycle vs. last" subtitle={`Weekly sets per muscle, week ${d.currentWeek} of each`} />
+          <CardTitle title="This cycle vs. last" subtitle={`Weekly sets per muscle, week ${d.currentWeek} of each`} info="cycleRadar" />
           <Radar
             axes={d.radar.axes.map((m) => muscleShort(m))}
             current={d.radar.current}
@@ -239,10 +240,10 @@ export const CycleTab: React.FC<CycleTabProps> = ({ mesocycleId, hasCycles, onGo
         visible={barMuscle != null}
         onClose={() => setBarMuscle(null)}
         title={barMuscle ? `${muscleLabel(barMuscle)} this week` : ''}
-        subtitle="Hard sets per exercise"
+        subtitle="Working sets per exercise"
       >
         <View>
-          {barExercises.length === 0 ? <Text style={styles.empty}>No hard sets this week yet.</Text> : null}
+          {barExercises.length === 0 ? <Text style={styles.empty}>No working sets this week yet.</Text> : null}
           {barExercises.map((e, i) => (
             <ListRow
               key={e.id}

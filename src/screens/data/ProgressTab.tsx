@@ -10,7 +10,7 @@ import {
 import { useProgress } from '../../hooks/useProgress';
 import { useExerciseProgress } from '../../hooks/useExerciseProgress';
 import { BarRow, Matrix } from '../../components/charts';
-import { E1rmChart, RecordTiles } from '../../components/exercise/LiftCharts';
+import { E1rmChart, RecordTiles } from '../../components/exercise/ExerciseCharts';
 import { ExercisePickerSheet } from '../../components/exercise/ExercisePickerSheet';
 import {
   Card,
@@ -18,6 +18,7 @@ import {
   ChevronGlyph,
   EmptyState,
   ErrorState,
+  InfoButton,
   NotEnough,
   SectionLabel,
   Skeleton,
@@ -42,7 +43,7 @@ export const ProgressTab: React.FC<ProgressTabProps> = ({ range }) => {
     if (exerciseId == null || !options.some((o) => o.id === exerciseId)) setExerciseId(options[0].id);
   }, [options, exerciseId]);
 
-  const lift = useExerciseProgress(exerciseId, range);
+  const exercise = useExerciseProgress(exerciseId, range);
 
   if (progress.error && options.length === 0) return <ErrorState onRetry={progress.refresh} />;
   if (progress.loading && options.length === 0) {
@@ -56,7 +57,7 @@ export const ProgressTab: React.FC<ProgressTabProps> = ({ range }) => {
   if (options.length === 0) return <EmptyState message="Log a few sessions to see your progress." />;
 
   const selected = options.find((o) => o.id === exerciseId) ?? options[0];
-  const l = lift.data;
+  const l = exercise.data;
   const series = l.series;
   const current = series[series.length - 1]?.e1rm ?? null;
   const first = series[0]?.e1rm ?? null;
@@ -73,52 +74,58 @@ export const ProgressTab: React.FC<ProgressTabProps> = ({ range }) => {
 
   return (
     <>
-      <Card padding={16} gap={12}>
-        <Pressable
-          onPress={() => setPickerOpen(true)}
-          accessibilityRole="button"
-          accessibilityLabel={`${selected.name}. Change exercise`}
-          style={styles.picker}
-        >
-          <View style={styles.pickerText}>
-            <Text style={styles.exercise}>{selected.name}</Text>
-            <Text style={styles.meta}>
-              Est. 1RM · {series.length} {series.length === 1 ? 'session' : 'sessions'}
-              {since ? ` since ${since}` : ''}
-            </Text>
-          </View>
-          <ChevronGlyph color={colors.text.secondary} size={16} />
-        </Pressable>
-        {lift.loading && series.length === 0 ? (
-          <Skeleton height={220} rounded="tile" />
-        ) : series.length === 0 ? (
-          <NotEnough />
-        ) : (
-          <>
-            <View style={styles.heroRow}>
-              <Text style={styles.hero}>{formatNumber(current!)}</Text>
-              <Text style={styles.unit}>lb</Text>
-              {change != null && first ? (
-                <Text style={[styles.change, { color: deltaColor(change / first) }]}>
-                  {formatSigned(change)} lb ({formatPercentDelta(change / first, 0)})
-                </Text>
-              ) : null}
+      <View style={styles.section}>
+        <SectionLabel>THIS EXERCISE</SectionLabel>
+        <Card padding={16} gap={12}>
+          <Pressable
+            onPress={() => setPickerOpen(true)}
+            accessibilityRole="button"
+            accessibilityLabel={`${selected.name}. Change exercise`}
+            style={styles.picker}
+          >
+            <View style={styles.pickerText}>
+              <Text style={styles.exercise}>{selected.name}</Text>
+              <Text style={styles.meta}>
+                Est. 1RM · {series.length} {series.length === 1 ? 'session' : 'sessions'}
+                {since ? ` since ${since}` : ''}
+              </Text>
             </View>
-            <E1rmChart series={series} trend={l.trend} name={selected.name} />
-          </>
-        )}
-      </Card>
+            <ChevronGlyph color={colors.text.secondary} size={16} />
+          </Pressable>
+          {exercise.loading && series.length === 0 ? (
+            <Skeleton height={220} rounded="tile" />
+          ) : series.length === 0 ? (
+            <NotEnough />
+          ) : (
+            <>
+              <View style={styles.heroRow}>
+                <Text style={styles.hero}>{formatNumber(current!)}</Text>
+                <Text style={styles.unit}>lb</Text>
+                {change != null && first ? (
+                  <Text style={[styles.change, { color: deltaColor(change / first) }]}>
+                    {formatSigned(change)} lb ({formatPercentDelta(change / first, 0)})
+                  </Text>
+                ) : null}
+                <View style={styles.infoRight}>
+                  <InfoButton id="e1rm" />
+                </View>
+              </View>
+              <E1rmChart series={series} trend={l.trend} name={selected.name} />
+            </>
+          )}
+        </Card>
+      </View>
 
       {l.sessions.length > 0 ? (
         <View style={styles.section}>
-          <SectionLabel>RECORDS FOR THIS LIFT</SectionLabel>
+          <SectionLabel>RECORDS</SectionLabel>
           <RecordTiles records={l.records} />
         </View>
       ) : null}
 
       {l.matrix.rows.length > 0 ? (
         <Card padding={16} gap={12}>
-          <CardTitle title="Where you actually train" subtitle={`${selected.name}, darker is more often`} />
+          <CardTitle title="Where you actually train" subtitle={`${selected.name}, darker is more often`} info="weightRepMatrix" />
           <Matrix
             rows={l.matrix.rows.map(formatWeight)}
             cols={[...MATRIX_REP_COLS]}
@@ -129,29 +136,32 @@ export const ProgressTab: React.FC<ProgressTabProps> = ({ range }) => {
         </Card>
       ) : null}
 
-      <Card padding={16} gap={12}>
-        <CardTitle title="Rep ranges, all lifts" subtitle="Share of your working sets" />
-        {progress.data.hardSetsInRange === 0 ? (
-          <NotEnough />
-        ) : (
-          <View style={styles.bars}>
-            {REP_BUCKETS.map((b) => (
-              <BarRow
-                key={b}
-                label={b}
-                labelWidth={48}
-                height={12}
-                value={progress.data.repRanges[b]}
-                max={1}
-                valueLabel={formatPercent(progress.data.repRanges[b])}
-              />
-            ))}
-          </View>
-        )}
-      </Card>
+      <View style={styles.section}>
+        <SectionLabel>ACROSS ALL EXERCISES</SectionLabel>
+        <Card padding={16} gap={12}>
+          <CardTitle title="Rep ranges" subtitle="Share of your working sets" info="repRanges" />
+          {progress.data.hardSetsInRange === 0 ? (
+            <NotEnough />
+          ) : (
+            <View style={styles.bars}>
+              {REP_BUCKETS.map((b) => (
+                <BarRow
+                  key={b}
+                  label={b}
+                  labelWidth={48}
+                  height={12}
+                  value={progress.data.repRanges[b]}
+                  max={1}
+                  valueLabel={formatPercent(progress.data.repRanges[b])}
+                />
+              ))}
+            </View>
+          )}
+        </Card>
+      </View>
 
       <Card padding={16} gap={12}>
-        <CardTitle title="Overload rate by muscle" subtitle={`Est. 1RM change per week · ${rangePhrase(range)}`} />
+        <CardTitle title="Overload rate by muscle" subtitle={`Est. 1RM change per week · ${rangePhrase(range)}`} info="overload" />
         {!progress.data.complete && overload.every((r) => r.rate == null) ? (
           <Skeleton height={160} rounded="tile" />
         ) : (
@@ -219,6 +229,9 @@ const styles = StyleSheet.create({
     ...type.metaSmall,
     fontSize: size.metaMid,
     color: colors.text.muted,
+  },
+  infoRight: {
+    marginLeft: 'auto',
   },
   heroRow: {
     flexDirection: 'row',

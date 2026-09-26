@@ -1,25 +1,32 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, hitSlop, type } from '../../theme';
+import { InfoButton } from './InfoButton';
+import type { ChartInfoId } from './chartInfo';
 
 interface SectionLabelProps {
   children: string;
   action?: { label: string; onPress: () => void };
   right?: React.ReactNode;
+  /** Adds an info button that explains the chart under this label. */
+  info?: ChartInfoId;
 }
 
-export const SectionLabel: React.FC<SectionLabelProps> = ({ children, action, right }) => (
+export const SectionLabel: React.FC<SectionLabelProps> = ({ children, action, right, info }) => (
   <View style={styles.row}>
     <Text style={styles.label} accessibilityRole="header">
       {children}
     </Text>
-    {action ? (
-      <Pressable onPress={action.onPress} hitSlop={hitSlop} accessibilityRole="button">
-        <Text style={styles.action}>{action.label}</Text>
-      </Pressable>
-    ) : (
-      right
-    )}
+    <View style={styles.rightGroup}>
+      {action ? (
+        <Pressable onPress={action.onPress} hitSlop={hitSlop} accessibilityRole="button">
+          <Text style={styles.action}>{action.label}</Text>
+        </Pressable>
+      ) : (
+        right
+      )}
+      {info ? <InfoButton id={info} /> : null}
+    </View>
   </View>
 );
 
@@ -29,7 +36,9 @@ export const CardTitle: React.FC<{
   subtitle?: string;
   action?: { label: string; onPress: () => void };
   right?: React.ReactNode;
-}> = ({ title, subtitle, action, right }) => (
+  /** Adds an info button that explains the chart under this title. */
+  info?: ChartInfoId;
+}> = ({ title, subtitle, action, right, info }) => (
   <View style={styles.titleRow}>
     <View style={styles.titleCol}>
       <Text style={styles.cardTitle} accessibilityRole="header">
@@ -37,13 +46,16 @@ export const CardTitle: React.FC<{
       </Text>
       {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
     </View>
-    {action ? (
-      <Pressable onPress={action.onPress} hitSlop={hitSlop} accessibilityRole="button">
-        <Text style={styles.link}>{action.label}</Text>
-      </Pressable>
-    ) : (
-      right
-    )}
+    <View style={styles.rightGroup}>
+      {action ? (
+        <Pressable onPress={action.onPress} hitSlop={hitSlop} accessibilityRole="button">
+          <Text style={styles.link}>{action.label}</Text>
+        </Pressable>
+      ) : (
+        right
+      )}
+      {info ? <InfoButton id={info} /> : null}
+    </View>
   </View>
 );
 
@@ -66,6 +78,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
+    gap: 10,
+  },
+  rightGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 10,
   },
   titleCol: {

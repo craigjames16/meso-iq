@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { colors, type } from '../../theme';
+import { LogoMark } from './glyphs';
 
 interface ScreenHeaderProps {
   title: string;
@@ -10,11 +11,14 @@ interface ScreenHeaderProps {
 
 export const ScreenHeader: React.FC<ScreenHeaderProps> = ({ title, subtitle, right }) => (
   <View style={styles.row}>
-    <View style={styles.titles}>
-      <Text style={styles.title} accessibilityRole="header">
-        {title}
-      </Text>
-      {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+    <View style={styles.left}>
+      <LogoMark />
+      <View style={styles.titles}>
+        <Text style={styles.title} accessibilityRole="header">
+          {title}
+        </Text>
+        {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+      </View>
     </View>
     {right ? <View style={styles.right}>{right}</View> : null}
   </View>
@@ -25,6 +29,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 10,
+  },
+  left: {
+    flexShrink: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 10,
   },
   titles: {

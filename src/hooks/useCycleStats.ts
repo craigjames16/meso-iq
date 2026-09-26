@@ -49,7 +49,7 @@ export interface StrengthRow {
   current: number | null;
   delta: number | null;
   stalled: boolean;
-  /** Hard sets for this lift rose across the stalled sessions. */
+  /** Hard sets for this exercise rose across the stalled sessions. */
   setsRising: boolean;
   /** Sessions the e1RM has been flat for, when stalled. */
   flatSessions: number;

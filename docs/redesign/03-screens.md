@@ -212,11 +212,11 @@ Behaviour: every option calls `workoutService.createStandaloneWorkout(name)`, th
 
 1. **Hero**: "WEEK 4 OF 5 · RIR 1" as a label, then "PPL/Upper/Lower · 11 of 15 days logged".
 2. **WHAT CHANGED**: up to three insight rows, in this priority:
-   - A stalled lift (gold warning icon): "Rope Pushdowns has stalled", then "Est. 1RM flat at 147 lb for 3 sessions while sets went up. Deload it or swap the movement." Use the second sentence only when that lift's weekly sets rose over the same sessions.
-   - The fastest riser: "Chest is your fastest riser", then "+8.4% est. 1RM per week across 3 chest lifts, best of any muscle this cycle."
+   - A stalled exercise (gold warning icon): "Rope Pushdowns has stalled", then "Est. 1RM flat at 147 lb for 3 sessions while sets went up. Deload it or swap the movement." Use the second sentence only when that exercise's weekly sets rose over the same sessions.
+   - The fastest riser: "Chest is your fastest riser", then "+8.4% est. 1RM per week across 3 chest exercises, best of any muscle this cycle."
    - Hide the card when there's nothing to say.
 3. **Hard sets this week**: a card titled "Hard sets this week", with subtitle "Sets, not tonnage, comparable across muscles". It has one `BarRow` per muscle, sorted by count. Each bar has a tick at the 4-week average and a delta against it. The caption reads "Tick = your 4-week average. Tap a bar for the exercises behind it." Tapping a bar opens a sheet listing that muscle's exercises and set counts this week.
-4. **Strength trend**: "Strength trend", with subtitle "Est. 1RM, this mesocycle" and an "All 89" link. The top five exercises by absolute change are shown as `ListRow`s with a `Sparkline`, the current e1RM and the delta. Stalled lifts show the delta in `danger.base`. The caption reads "Epley estimate from the heaviest working set each session." A row opens `ExerciseDetail`.
+4. **Strength trend**: "Strength trend", with subtitle "Est. 1RM, this mesocycle" and an "All 89" link. The top five exercises by absolute change are shown as `ListRow`s with a `Sparkline`, the current e1RM and the delta. Stalled exercises show the delta in `danger.base`. The caption reads "Epley estimate from the heaviest working set each session." A row opens `ExerciseDetail`.
 5. **This cycle vs. last**: "Weekly sets per muscle, week 4 of each". A `Radar` from `cycleRadar`, keyed "Meso 3 (now)" and "Meso 2". Hide it when there's no previous mesocycle.
 
 Empty: "Start a cycle to see how it's going", with a button to the Plan tab.
@@ -228,12 +228,14 @@ Empty: "Start a cycle to see how it's going", with a button to the Plan tab.
 - **Data**: `useExerciseProgress(exerciseId, range)`, `useProgress(range)`
 - **Filter**: a range chip: Last 3 months, Last 6 months (default), Last 12 months, All time.
 
+The page splits into two labelled sections, so the scope change is visible. **THIS EXERCISE** covers items 1 to 5, **ACROSS ALL EXERCISES** covers items 6 and 7. The app calls these *exercises*, never *lifts*, everywhere a reader sees the word.
+
 1. **Exercise picker**: the exercise name as a tappable title with a chevron. It opens a searchable exercise list. It defaults to the exercise with the most sessions in the range.
 2. **Hero**: "Est. 1RM · 18 sessions since March", then the current e1RM (`hero`) with "lb", then the change over the range ("+44 lb (+26%)").
 3. **Line chart**: the e1RM series with a dashed trend line and PR rings, a y-axis with four ticks, and month labels. The inline key reads "Trend" and "Personal record".
-4. **RECORDS FOR THIS LIFT**: a 2×2 grid of `StatTile`s: Heaviest set (225 × 5), Most reps (18 × 135), Best session volume (9,240) and Best est. 1RM (253 lb). Each shows its date.
+4. **RECORDS**: a 2×2 grid of `StatTile`s: Heaviest set (225 × 5), Most reps (18 × 135), Best session volume (9,240) and Best est. 1RM (253 lb). Each shows its date.
 5. **Where you actually train**: the exercise name, with subtitle "darker is more often". A `Matrix` from `weightRepMatrix` with weight rows and the rep columns ≤4 to 13+, followed by the generated caption.
-6. **Rep ranges, all lifts**: "Share of your working sets". Five `BarRow`s from `repRangeShare`, showing percentages.
+6. **Rep ranges**: "Share of your working sets". Five `BarRow`s from `repRangeShare`, showing percentages.
 7. **Overload rate by muscle**: "Est. 1RM change per week · last 6 months". The range text follows the filter. It has one `BarRow` per muscle from `muscleOverloadRate`: positive values in `data.main`, negative values in `data.reference`. Muscles with `null` show "Not enough sessions". The caption reads "Slope of a fit through each muscle's est. 1RM series."
 
 Empty: "Log a few sessions to see your progress."
@@ -271,7 +273,7 @@ Empty: "Log a few sessions to see your progress."
 
 - **Header**: `DetailHeader` with an "Edit" action that opens `WorkoutDetail` for the same instance. The title is the workout name. The meta line is "Wed, Sep 16 · Meso 3 · Week 2 · Day 3", or "Off-plan".
 - **Stat tiles**: Sets, lb lifted, and the delta against the last session of the same workout.
-- **Exercise cards**: the name, with meta "4 sets · 5,880 lb" (or "+25 lb · 4 sets" for bodyweight-plus lifts). Read-only rows show the badge and "140 × 12". Attached rows are indented, with technique badges. There are no checkboxes, fields or menus.
+- **Exercise cards**: the name, with meta "4 sets · 5,880 lb" (or "+25 lb · 4 sets" for bodyweight-plus exercises). Read-only rows show the badge and "140 × 12". Attached rows are indented, with technique badges. There are no checkboxes, fields or menus.
 
 Acceptance: this screen makes no writes. Editing happens only through the logger.
 

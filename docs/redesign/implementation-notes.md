@@ -31,6 +31,9 @@ Screen behaviour is covered by render tests in `src/screens/__tests__`. They mou
 - **Workout complete**: "Next: Upper" omits the weekday, because plan days aren't tied to dates.
 - **Consistency calendars**: two columns, per the spec, rather than the board's three.
 - **Type scale**: components use named sizes from `size` in `src/theme/type.ts` rather than raw numbers.
+- **Brand mark**: the spec has no logo. `LogoMark` in `src/components/ui/glyphs.tsx` draws one, and it ships in two places: `ScreenHeader`, so it shows once on each of Track, Data and Plan, and the `AuthLayout` lockup beside the wordmark. Detail screens, sheets and the logger have no mark — the top-left there belongs to Back. The canvas boards match.
+- **Chart info sheets**: the spec has no info affordance on charts. Every chart that shows a derived number now carries an `InfoButton` whose sheet defines the metric, so the definitions in [`02-analytics.md`](02-analytics.md) reach the reader. The copy lives in `src/components/ui/chartInfo.ts`; charts without an `InfoButton` are the presentational ones (sparklines inside rows, the week dots).
+- **Tab bar selection**: the board draws the active tab as a solid white pill. It ships as a lighter glass capsule that slides between tabs instead, because solid white at that size reads as a button placed on the bar rather than the bar's own material responding. The shape and motion are specified in [`01-design-system.md`](01-design-system.md#glass-tab-bar).
 
 ## Gated on the API
 

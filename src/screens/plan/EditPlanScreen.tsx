@@ -299,7 +299,7 @@ export const EditPlanScreen: React.FC = () => {
 
             <Card padding={16} gap={12}>
               <View style={styles.readoutHead}>
-                <SectionLabel>AS YOU BUILD IT</SectionLabel>
+                <SectionLabel info="volumeProfile">AS YOU BUILD IT</SectionLabel>
                 <Text style={styles.meta}>
                   {training.length} {training.length === 1 ? 'day' : 'days'} · {exerciseCount} {exerciseCount === 1 ? 'exercise' : 'exercises'} ·{' '}
                   {startingSets} starting sets

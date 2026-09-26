@@ -6,7 +6,7 @@ import { colors, glass, radius, tabularNums, type, size } from '../../theme';
 export interface WeekCell {
   dayNumber: number;
   state: 'done' | 'today' | 'rest' | 'planned' | 'missed';
-  /** Hard sets when done. */
+  /** Working sets when done. */
   sets?: number;
   name: string;
 }
@@ -16,11 +16,11 @@ export const ThisWeek: React.FC<{ cells: WeekCell[]; done: number; total: number
     <CardTitle title="This week" right={<Text style={styles.count}>{`${done} of ${total} done`}</Text>} />
     <View style={styles.row}>
       {cells.map((c) => {
-        // Done days lead with their hard-set count; others lead with the day's name.
+        // Done days lead with their working-set count; others lead with the day's name.
         const top = c.state === 'done' ? String(c.sets ?? 0) : c.state === 'rest' ? '—' : c.name;
         const bottom = { done: c.name, rest: 'Rest', today: 'Today', planned: 'Plan', missed: 'Missed' }[c.state];
         return (
-          <View key={c.dayNumber} style={styles.col} accessible accessibilityLabel={`Day ${c.dayNumber}: ${c.state === 'done' ? `${c.name}, ${c.sets} hard sets` : `${top}, ${bottom}`}`}>
+          <View key={c.dayNumber} style={styles.col} accessible accessibilityLabel={`Day ${c.dayNumber}: ${c.state === 'done' ? `${c.name}, ${c.sets} working sets` : `${top}, ${bottom}`}`}>
             <Text style={styles.letter}>{c.dayNumber}</Text>
             <View style={[styles.cell, styles[c.state]]}>
               <Text style={[styles.top, topStyle[c.state]]} numberOfLines={1}>

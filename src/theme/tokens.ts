@@ -78,6 +78,8 @@ export const glass = {
   sheen: 'rgba(255,255,255,0.11)',
   innerHighlight: 'rgba(255,255,255,0.14)',
   todayFill: 'rgba(250,250,250,0.10)',
+  selectedFill: 'rgba(250,250,250,0.15)', // the tab bar's selection capsule
+  selectedEdge: 'rgba(255,255,255,0.20)', // light catching its top edge
   scrimOpacity: 0.7,
 } as const;
 
@@ -91,10 +93,9 @@ export const radius = {
   tile: 7, // stat tiles, inputs, segmented container
   card: 8, // cards, icon buttons, primary buttons
   sheet: 12, // sheet top corners
-  tabItem: 12, // active tab pill
+  tabItem: 23, // active tab capsule: half of the 46pt item height
   play: 14, // Track play button
-  tabBarInner: 17,
-  tabBar: 18, // glass tab bar outer
+  tabBar: 29, // glass tab bar: half of the 58pt bar height, concentric with the item
   round: 999, // avatars, dots
 } as const;
 

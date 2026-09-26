@@ -110,7 +110,7 @@ describe('Mesocycle and exercise detail', () => {
     await act(async () => r.unmount());
   });
 
-  it('shows the lift, records, sessions and programs it is used in', async () => {
+  it('shows the exercise, records, sessions and programs it is used in', async () => {
     const r = await renderScreen('ExerciseDetail', ExerciseDetailScreen, { exerciseId: 10 });
     let text = textOf(r.root);
     expect(text).toContain('Cable Flyes');

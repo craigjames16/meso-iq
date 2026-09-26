@@ -9,7 +9,7 @@ All functions live in `src/analytics/` as pure TypeScript with no React or netwo
 Every metric comes from endpoints the client already calls.
 
 - **Training history**: `GET /api/workout-instances/history` through `workoutService.getHistory()` and `ScheduleContext.fetchHistory()`. It returns completed workout instances with `exerciseSets`, covering about one year. It feeds consistency, streak, tonnage, weekly hard sets, days since trained and rep ranges.
-- **Single exercise**: `GET /api/exercises/:id` through `exercisesService.getExercise(id)`. It returns every session for that exercise with its sets. It feeds the e1RM series, PRs, records, matrix and stall checks for one lift.
+- **Single exercise**: `GET /api/exercises/:id` through `exercisesService.getExercise(id)`. It returns every session for that exercise with its sets. It feeds the e1RM series, PRs, records, matrix and stall checks for one exercise.
 - **Exercise list**: `GET /api/exercises` through `exercisesService.getExercises()`. It returns exercises grouped by category. Use it to map `exerciseId` to its muscle category, because history sets don't carry the category.
 - **Mesocycle detail**: `GET /api/mesocycles/:id` through `mesocyclesService.getMesocycle(id)`. It returns plan instances (weeks) with `iterationNumber`, `rir` and days with `isComplete`. It feeds adherence and the week-by-week list.
 - **Mesocycle progress**: `GET /api/dashboard?data=mesocycle&id=:id` through `dashboardService.getMesocycleProgress(id)`. It returns plan days × iterations × exercises with sets. It feeds cycle e1RM deltas and the cycle radar.
@@ -139,7 +139,7 @@ Workout complete shows these. `repsAtWeight` fires when a main set has more reps
 export function isStalled(series: SeriesPoint[], opts?: { minSessions?: 4; window?: 3; threshold?: 0.005 }): boolean;
 ```
 
-A lift is stalled when it has at least `minSessions` points and the best e1RM in the last `window` points is no more than `threshold` (0.5%) above the best e1RM before them.
+An exercise is stalled when it has at least `minSessions` points and the best e1RM in the last `window` points is no more than `threshold` (0.5%) above the best e1RM before them.
 
 ### Overload rate
 

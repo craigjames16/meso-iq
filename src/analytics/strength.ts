@@ -75,7 +75,7 @@ export interface LiftRecords {
   bestE1rm: { e1rm: number; date: string } | null;
 }
 
-/** Records for one lift. Heaviest and most reps use main sets; session volume uses all sets. */
+/** Records for one exercise. Heaviest and most reps use main sets; session volume uses all sets. */
 export function liftRecords(sessions: ExerciseSession[]): LiftRecords {
   let heaviest: LiftRecords['heaviest'] = null;
   let mostReps: LiftRecords['mostReps'] = null;
@@ -191,7 +191,7 @@ export interface StallOptions {
 }
 
 /**
- * A lift is stalled when it has at least `minSessions` points and the best
+ * An exercise is stalled when it has at least `minSessions` points and the best
  * e1RM in the last `window` points is no more than `threshold` above the
  * best before them.
  */

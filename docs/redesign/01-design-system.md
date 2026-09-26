@@ -95,7 +95,8 @@ export const radius = {
   card: 8,      // cards, icon buttons, primary buttons
   sheet: 12,    // sheet top corners
   play: 14,     // Track play button
-  tabBar: 18,   // glass tab bar outer; inner uses 17
+  tabItem: 23,  // tab bar selection capsule: half the 46pt item height
+  tabBar: 29,   // glass tab bar: half the 58pt bar height, concentric with the item
   round: 999,   // avatars, dots
 } as const;
 ```
@@ -139,10 +140,12 @@ Use the system font (SF Pro on iOS). Define these as text style objects in `src/
 Build these in `src/components/ui/` and export them from `src/components/ui/index.ts`. Props below are the minimum. Add what the screens need.
 
 - **`Screen`**: safe-area wrapper with a `ScrollView`, `bg` background and the screen padding. Props: `scroll?: boolean`, `refreshControl?`.
-- **`ScreenHeader`**: tab title (`tabTitle`) with an optional right accessory (avatar button, filter chip). Props: `title`, `right?`.
+- **`ScreenHeader`**: the `LogoMark`, then the tab title (`tabTitle`), with an optional right accessory (avatar button, filter chip). Props: `title`, `subtitle?`, `right?`. Track, Data and Plan use it, so the mark appears once per tab and nowhere else in the app chrome.
+- **`LogoMark`**: the MesoIQ mark — three bars in `data.main` stepping up, then a fourth in `data.reference`, higher again. Props: `size?` (18 in a header, 30 in the auth lockup). Brand only: it carries no state and never responds to a press. Pushed screens keep the back button in the top-left instead.
 - **`DetailHeader`**: back chevron, optional right action text (for example "Edit"), then `detailTitle` and a meta line. Props: `title`, `meta?`, `onBack`, `action?: { label, onPress }`.
 - **`Card`**: `surface.card` with a `border.card` border and `radius.card`. Props: `variant?: 'default' | 'subtle' | 'warning' | 'danger'`, `padding?: 14 | 16`.
-- **`SectionLabel`**: uppercase label with an optional right link ("All 89"). Props: `children`, `action?: { label, onPress }`.
+- **`SectionLabel`**: uppercase label with an optional right link ("All 89"). Props: `children`, `action?: { label, onPress }`, `info?: ChartInfoId`.
+- **`InfoButton`**: an ⓘ glyph that opens a `Sheet` explaining what a chart measures. Props: `id: ChartInfoId`. The copy lives in `src/components/ui/chartInfo.ts`, keyed by chart. `CardTitle` and `SectionLabel` take an `info` prop that renders one on the right, so most charts need no extra markup. Place it standalone only where a chart has neither.
 - **`Button`**: Props: `variant: 'primary' | 'secondary' | 'ghost' | 'danger'`, `label`, `onPress`, `disabled?`, `loading?`, `full?`. Primary is `action.fill` with `action.onFill` text, `radius.card`, 15px vertical padding and the shadow `{ shadowColor: '#000', shadowOpacity: 0.45, shadowRadius: 7, shadowOffset: { width: 0, height: 4 }, elevation: 6 }`. Put the shadow values in `src/theme/shadow.ts`.
 - **`IconButton`**: 30–34pt square, `surface.raised`, `border.raised`, `radius.card`. Props: `icon`, `onPress`, `accessibilityLabel` (required).
 - **`Chip`**: Props: `label`, `selected`, `onPress`. Unselected is `surface.raised` with `text.secondary`.
@@ -160,9 +163,22 @@ Build these in `src/components/ui/` and export them from `src/components/ui/inde
 Restyle `src/components/GlassTabBar.tsx`. Keep its current `@callstack/liquid-glass` usage and its non-glass fallback.
 
 - **Position**: absolute, `left: 10`, `right: 10`, `bottom: 14` plus the safe-area inset.
-- **Rim**: the outer view is a 1px gradient border with `radius.tabBar` (18).
-- **Fill**: the inner view uses radius 17. On the fallback path, use `rgba(26,26,32,0.46)`. The glass path supplies its own blur (target `blur(26) saturate(190%)`).
-- **Items**: Track, Data and Plan, each with an icon above a label. The active item is a white pill with dark icon and label. Inactive items use `text.secondary`.
+- **Shape**: a capsule. The bar is 58pt tall, so `radius.tabBar` (29) closes both ends. Items are 46pt tall inside a 6pt rail, which keeps `radius.tabItem` (23) concentric with the outer edge.
+- **Rim**: a 1px gradient stroke drawn over the glass with `react-native-svg`, using `glass.rimStops`. It is brightest along the top edge, where light would strike the material, and it is what separates the bar from dark content behind it.
+- **Fill**: the glass path supplies its own blur (target `blur(26) saturate(190%)`). On the fallback path, use `glass.fill`.
+- **Items**: Track, Data and Plan, each with a 21pt glyph above a label.
+- **Selection**: one capsule in `glass.selectedFill` with a hairline `glass.selectedEdge` top border, sized to a third of the rail. It slides to the tapped tab; it is not redrawn per item. The selected tab's glyph and label are `text.primary`, the rest `text.secondary`.
+
+The selection is a *lighter* layer of glass rather than the solid white pill the board shows. Solid white at this size reads as a button sitting on the bar instead of the bar's own material responding, and it fights the blur underneath.
+
+### Motion
+
+One `Animated.Value` holds the selection's position as a fractional tab index. The capsule's `translateX` and every tab's brightness interpolate from it, so the highlight cannot drift away from the capsule. Both run on the native driver.
+
+- **The travel is a spring, not a timing.** A spring re-targets from wherever the capsule currently is, so a tap mid-slide redirects it instead of restarting the journey. A fixed-duration animation cannot be interrupted this way.
+- **Springs are written as a response and a damping ratio** — the two values Apple's designers work in — and converted in `src/theme/motion.ts`. The selection uses `spring(0.38, 0.9)`: quick, with just enough give to read as physical rather than mechanical.
+- **Press feedback lands on touch-down**, not on release. The pressed tab springs to 0.9 scale with no overshoot and returns with a little bounce once the finger lifts.
+- **Reduce Motion cuts the travel.** `useReducedMotion` in `src/hooks` watches the system setting; when it is on, the position is set directly and the capsule appears at the new tab without crossing the bar.
 
 ## Chart primitives
 
@@ -176,6 +192,8 @@ Build these in `src/components/charts/` with `react-native-svg`. They are presen
 - **`Matrix`**: weight rows × rep-bucket columns. Props: `rows: string[]`, `cols: string[]`, `cells: number[][]` (levels 0–4), `counts?: number[][]`. Cells use `data.matrix[level]`. Text on the brightest level uses `data.onMatrixMax`.
 - **`Radar`**: 6 to 8 axes. Props: `axes: string[]`, `current: number[]`, `previous?: number[]`, both normalised to 0–1. Current is `data.main` at 2px with 18% fill. Previous is `data.reference`, dashed, no fill.
 - **`ProfileBars`**: short vertical bars with three-letter muscle labels, used for the program volume profile. Props: `bars: { label; value; warn?: boolean }[]`. Warned bars use `warning.base`.
+
+Every chart that shows a derived number carries an `InfoButton`. Its sheet names what the marks encode, how the number is computed and what the chart can't tell you. Keep each claim traceable to a function in `src/analytics`, and update the copy when the formula changes.
 
 Label chart axes with `meta` in `text.faint`. Don't draw legends when a direct label works. The Progress line chart has a two-item inline key ("Trend", "Personal record") because the markers aren't labelled.
 

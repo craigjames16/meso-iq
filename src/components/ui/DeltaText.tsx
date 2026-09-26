@@ -8,7 +8,7 @@ interface DeltaTextProps {
   value: number | null | undefined;
   digits?: number;
   style?: StyleProp<TextStyle>;
-  /** Force the negative colour, for example on a stalled lift. */
+  /** Force the negative colour, for example on a stalled exercise. */
   tone?: 'auto' | 'danger' | 'muted';
   suffix?: string;
 }

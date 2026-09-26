@@ -7,7 +7,7 @@ import { dayKey, monthGrid, type HeatLevel, type Session } from '../../analytics
 import { useConsistency } from '../../hooks/useConsistency';
 import { useTrainingHistory } from '../../hooks/useTrainingHistory';
 import { HeatGrid } from '../../components/charts';
-import { Card, Chip, DetailHeader, ErrorState, Screen, Sheet, Skeleton, StatRow, StatTile } from '../../components/ui';
+import { Card, Chip, DetailHeader, ErrorState, InfoButton, Screen, Sheet, Skeleton, StatRow, StatTile } from '../../components/ui';
 import { SessionRow } from '../../components/session/SessionRow';
 import { colors, radius, type, size } from '../../theme';
 import { formatFullDate, formatPercent, monthShort } from '../../utils/format';
@@ -17,7 +17,7 @@ type Nav = NativeStackNavigationProp<RootStackParamList, 'Heatmap'>;
 
 const MONTHS = Array.from({ length: 12 }, (_, i) => i);
 
-/** Full-year consistency: twelve month calendars shaded by hard sets. */
+/** Full-year consistency: twelve month calendars shaded by working sets. */
 export const HeatmapScreen: React.FC = () => {
   const { params } = useRoute<Route>();
   const navigation = useNavigation<Nav>();
@@ -92,7 +92,10 @@ export const HeatmapScreen: React.FC = () => {
             ))}
             <Text style={styles.keyLabel}>Big day</Text>
           </View>
-          <Text style={styles.caption}>Shade is that day's hard sets. Tap a day to open the session.</Text>
+          <View style={styles.captionRow}>
+            <Text style={styles.caption}>Shade is that day's working sets. Tap a day to open the session.</Text>
+            <InfoButton id="consistency" />
+          </View>
         </Card>
       )}
 
@@ -157,7 +160,13 @@ const styles = StyleSheet.create({
     height: 12,
     borderRadius: radius.cell,
   },
+  captionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
   caption: {
+    flex: 1,
     ...type.metaSmall,
     color: colors.text.muted,
   },

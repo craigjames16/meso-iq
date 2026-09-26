@@ -23,3 +23,6 @@ export { AvatarButton } from './Avatar';
 export * from './glyphs';
 export { PickerSheet } from './PickerSheet';
 export { Insight } from './Insight';
+export { InfoButton } from './InfoButton';
+export { CHART_INFO } from './chartInfo';
+export type { ChartInfo, ChartInfoId } from './chartInfo';

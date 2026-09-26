@@ -88,7 +88,7 @@ export const PlanDetailScreen: React.FC = () => {
       />
 
       <Card padding={16} gap={12}>
-        <SectionLabel>STARTING SETS PER MUSCLE · WEEK 1</SectionLabel>
+        <SectionLabel info="volumeProfile">STARTING SETS PER MUSCLE · WEEK 1</SectionLabel>
         <ProfileBars
           bars={ALL_MUSCLES.map((m) => ({ label: muscleShort(m), value: profile[m], warn: profile[m] > 0 && profile[m] < LOW_VOLUME_SETS }))}
         />

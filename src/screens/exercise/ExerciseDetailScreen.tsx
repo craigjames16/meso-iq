@@ -7,7 +7,7 @@ import { repRangeLabel, topSet } from '../../analytics';
 import { useExerciseProgress } from '../../hooks/useExerciseProgress';
 import { usePlans } from '../../hooks/usePlans';
 import { LineChart, niceTicks } from '../../components/charts';
-import { E1rmChart, RecordTiles, monthLabels } from '../../components/exercise/LiftCharts';
+import { E1rmChart, RecordTiles, monthLabels } from '../../components/exercise/ExerciseCharts';
 import { EditExerciseSheet } from '../../components/exercise/EditExerciseSheet';
 import { planDayName, sortedDays } from '../../components/plan/planText';
 import { Card, CardTitle, DetailHeader, EmptyState, ErrorState, ListRow, Screen, SectionLabel, Segmented, Skeleton, Tag, deltaColor } from '../../components/ui';
@@ -79,7 +79,7 @@ export const ExerciseDetailScreen: React.FC = () => {
       ) : (
         <>
           <Card padding={16} gap={12}>
-            <SectionLabel>ESTIMATED 1RM</SectionLabel>
+            <SectionLabel info={chart === 'e1rm' ? 'e1rm' : 'sessionVolume'}>ESTIMATED 1RM</SectionLabel>
             <View style={styles.heroRow}>
               <Text style={styles.hero}>{current != null ? formatNumber(current) : '—'}</Text>
               <Text style={styles.unit}>lb</Text>

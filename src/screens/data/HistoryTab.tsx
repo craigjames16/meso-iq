@@ -68,6 +68,7 @@ export const HistoryTab: React.FC<{ year: number }> = ({ year }) => {
           title="Consistency"
           subtitle={`Last ${STRIP_WEEKS} weeks`}
           right={c.streak > 0 ? <Tag label={`${c.streak} WK STREAK`} tone="success" /> : undefined}
+          info="consistency"
         />
         <HeatGrid weeks={strip.cells} maxCell={12} />
         <View style={styles.monthRow}>
@@ -90,7 +91,7 @@ export const HistoryTab: React.FC<{ year: number }> = ({ year }) => {
       </Card>
 
       <Card padding={16} gap={12}>
-        <CardTitle title="Tonnage per month" subtitle="Total lb lifted, with 3-month average" />
+        <CardTitle title="Volume per month" subtitle="Total lb lifted, with 3-month average" info="tonnage" />
         <VerticalBars
           bars={months.map((m, i) => ({
             label: monthShort(m.month).toUpperCase(),
@@ -101,7 +102,7 @@ export const HistoryTab: React.FC<{ year: number }> = ({ year }) => {
           }))}
           average={months.map((m) => (m.partial ? null : m.avg3))}
           formatY={(v) => (v === 0 ? '0' : formatCompact(v))}
-          accessibilityLabel={`Monthly tonnage for ${year}`}
+          accessibilityLabel={`Monthly volume for ${year}`}
         />
         <LineKey
           items={[

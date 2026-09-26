@@ -1,7 +1,7 @@
 import { act } from 'react-test-renderer';
 import { DataScreen } from '../main/DataScreen';
 import { HeatmapScreen } from '../main/HeatmapScreen';
-import { press, renderScreen, textOf, unlabelledPressables } from '../../testing/render';
+import { byLabel, press, renderScreen, textOf, unlabelledPressables } from '../../testing/render';
 
 jest.mock('../../services/workoutService', () => ({
   workoutService: {
@@ -30,12 +30,12 @@ async function openTab(label: string) {
 }
 
 describe('Data tab', () => {
-  it('Cycle shows the cycle position, hard sets, and strength trend', async () => {
+  it('Cycle shows the cycle position, working sets, and strength trend', async () => {
     const r = await openTab('Cycle');
     const text = textOf(r.root);
     expect(text).toContain('WEEK 2 OF 5 · RIR 2');
     expect(text).toContain('PPL · 4 of 5 days logged');
-    expect(text).toContain('Hard sets this week');
+    expect(text).toContain('Working sets this week');
     expect(text).toContain('CHEST');
     expect(text).toContain('Strength trend');
     expect(text).toContain('Cable Flyes');
@@ -54,12 +54,14 @@ describe('Data tab', () => {
     // 57.5 × 12 → 80.5; 40 × 12 → 56: +25 lb (+44%).
     expect(text).toContain('81');
     expect(text).toContain('+25 lb (+44%)');
-    expect(text).toContain('RECORDS FOR THIS LIFT');
+    expect(text).toContain('THIS EXERCISE');
+    expect(text).toContain('RECORDS');
     expect(text).toContain('57.5 × 12');
     expect(text).toContain('12 × 57.5');
     expect(text).toContain('Where you actually train');
     expect(text).toContain('You have never lifted 57.5 lb for more than 12 reps.');
-    expect(text).toContain('Rep ranges, all lifts');
+    expect(text).toContain('ACROSS ALL EXERCISES');
+    expect(text).toContain('Rep ranges');
     expect(text).toContain('100%');
     expect(text).toContain('Est. 1RM change per week · last 6 months');
     expect(text).not.toMatch(/NaN|undefined/);
@@ -67,12 +69,12 @@ describe('Data tab', () => {
     await act(async () => r.unmount());
   });
 
-  it('History shows consistency, tonnage, mesocycles, sessions and all-time totals', async () => {
+  it('History shows consistency, volume, mesocycles, sessions and all-time totals', async () => {
     const r = await openTab('History');
     const text = textOf(r.root);
     expect(text).toContain('Consistency');
     expect(text).toContain('Last 26 weeks');
-    expect(text).toContain('Tonnage per month');
+    expect(text).toContain('Volume per month');
     expect(text).toContain('MESOCYCLES');
     expect(text).toContain('Meso 3 · PPL');
     expect(text).toContain('ACTIVE');
@@ -81,6 +83,24 @@ describe('Data tab', () => {
     expect(text).toContain('Exercises used');
     expect(text).not.toMatch(/NaN|undefined/);
     expect(unlabelledPressables(r.root)).toEqual([]);
+    await act(async () => r.unmount());
+  });
+
+  it('the tab header carries the MesoIQ mark', async () => {
+    const r = await openTab('Cycle');
+    // One mark per screen: react-test-renderer reports the component and its host nodes.
+    const marks = r.root.findAll((n) => n.props.accessibilityLabel === 'MesoIQ' && typeof n.type === 'string');
+    expect(marks.length).toBe(1);
+    await act(async () => r.unmount());
+  });
+
+  it('a chart info button opens a sheet defining the metric', async () => {
+    const r = await openTab('Cycle');
+    await press(byLabel(r.root, 'About Working sets this week'));
+    const text = textOf(r.root);
+    expect(text).toContain('Each bar is the number of working sets you have logged for that muscle since Monday.');
+    expect(text).toContain('Tick');
+    expect(text).toContain('Your average for that muscle over the previous four weeks, not including this one.');
     await act(async () => r.unmount());
   });
 });
@@ -92,7 +112,7 @@ describe('Consistency screen', () => {
     for (const m of ['JAN', 'JUN', 'DEC']) expect(text).toContain(m);
     expect(text).toContain('Current streak');
     expect(text).toContain('Big day');
-    expect(text).toContain("Shade is that day's hard sets. Tap a day to open the session.");
+    expect(text).toContain("Shade is that day's working sets. Tap a day to open the session.");
     expect(unlabelledPressables(r.root)).toEqual([]);
     await act(async () => r.unmount());
   });
