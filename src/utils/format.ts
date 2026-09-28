@@ -100,6 +100,11 @@ export function weekdayLong(day: number): string {
   return DAYS_LONG[day] ?? '';
 }
 
+/** "Wed" */
+export function weekdayShort(day: number): string {
+  return DAYS_SHORT[day] ?? '';
+}
+
 /** Whole calendar days between two dates in the device time zone. */
 export function calendarDaysBetween(from: string | Date, to: string | Date): number {
   const a = toDate(from);

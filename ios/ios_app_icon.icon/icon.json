@@ -1,29 +1,42 @@
 {
   "fill" : {
-    "solid" : "display-p3:0.05386,0.10454,0.20586,1.00000"
+    "linear-gradient" : [
+      "srgb:0.10588,0.10588,0.12941,1.00000",
+      "srgb:0.04314,0.04314,0.05098,1.00000"
+    ]
   },
   "groups" : [
     {
       "layers" : [
         {
-          "image-name" : "MIQ 3.png",
-          "name" : "MIQ 3",
-          "position" : {
-            "scale" : 0.8,
-            "translation-in-points" : [
-              0,
-              -9
-            ]
-          }
+          "image-name" : "MesoIQGlow.png",
+          "name" : "Glow"
         }
       ],
       "shadow" : {
         "kind" : "neutral",
-        "opacity" : 0.5
+        "opacity" : 0.00000
       },
       "translucency" : {
+        "enabled" : false,
+        "value" : 0.50000
+      }
+    },
+    {
+      "layers" : [
+        {
+          "image-name" : "MesoIQMark.png",
+          "name" : "Mark"
+        }
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.50000
+      },
+      "specular" : true,
+      "translucency" : {
         "enabled" : true,
-        "value" : 0.5
+        "value" : 0.50000
       }
     }
   ],

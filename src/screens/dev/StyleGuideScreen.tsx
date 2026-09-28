@@ -11,6 +11,7 @@ import {
   DetailHeader,
   EmptyState,
   ErrorState,
+  ChevronGlyph,
   IconButton,
   ListRow,
   MenuAction,
@@ -110,6 +111,20 @@ export const StyleGuideScreen: React.FC = () => {
         <View style={styles.row}>
           <IconButton icon={<MoreGlyph />} onPress={() => {}} accessibilityLabel="More" />
           <IconButton icon={<PlusGlyph color={colors.text.body} />} onPress={() => {}} accessibilityLabel="Add" size={34} />
+          <IconButton
+            icon={<ChevronGlyph direction="left" size={16} color={colors.text.primary} strokeWidth={2} />}
+            onPress={() => {}}
+            accessibilityLabel="Glass back"
+            variant="glass"
+            size={34}
+          />
+          <IconButton
+            icon={<MoreGlyph color={colors.text.primary} />}
+            onPress={() => {}}
+            accessibilityLabel="Glass menu"
+            variant="glass"
+            size={34}
+          />
           <AvatarButton initial="C" onPress={() => {}} />
         </View>
       </Section>
@@ -192,7 +207,7 @@ export const StyleGuideScreen: React.FC = () => {
 
       <Section title="Charts">
         <Card>
-          <CardTitle title="Working sets this week" subtitle="Sets, not volume, comparable across muscles" info="hardSets" />
+          <CardTitle title="Working sets, last 7 days" subtitle="Comparable across muscles" info="hardSets" />
           <BarRowSample />
         </Card>
         <Card>

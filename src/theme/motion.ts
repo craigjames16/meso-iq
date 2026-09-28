@@ -27,4 +27,6 @@ export const motion = {
   press: spring(0.22, 1),
   /** The same control returning once the finger lifts. */
   release: spring(0.34, 0.72),
+  /** A sheet settling on a detent. It overshoots, because a drag threw it there. */
+  sheet: spring(0.3, 0.8),
 } as const;

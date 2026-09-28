@@ -49,14 +49,15 @@ export const CHART_INFO: Record<ChartInfoId, ChartInfo> = {
     note: 'Volume rises with body-weight-independent load and rep count, so it compares a month against your other months. It does not compare one muscle against another — use working sets for that.',
   },
   hardSets: {
-    title: 'Working sets this week',
-    summary: 'Each bar is the number of working sets you have logged for that muscle since Monday.',
+    title: 'Working sets, last 7 days',
+    summary: 'Each bar is the number of working sets you have logged for that muscle over the last 7 days, today included.',
     details: [
       { term: 'Working set', text: 'A set of at least 1 rep. Sets attached to it are part of it, not extra sets.' },
       { term: 'Muscle', text: 'A set counts toward the muscle category of its exercise. Exercises with no category are left out.' },
-      { term: 'Tick', text: 'Your average for that muscle over the previous four weeks, not including this one. Weeks you did not train count as zero.' },
+      { term: 'Tick', text: 'Your average for that muscle over the four 7-day windows before this one, so 28 days of history set the baseline. A window with no sessions counts as zero.' },
+      { term: 'Rolling window', text: 'The window moves with the day rather than resetting on Monday, so the bar and the tick always cover 7 days each and the number reads the same whenever you look at it.' },
     ],
-    note: 'Set counts, not volume, so a set of calf raises and a set of squats weigh the same here. That is what makes the muscles comparable.',
+    note: 'Set counts, not volume, so a set of calf raises and a set of squats weigh the same here. That is what makes the muscles comparable. A rolling window also smooths the step into a deload: it holds days from the hard week for up to six days after the deload starts.',
   },
   strengthTrend: {
     title: 'Strength trend',

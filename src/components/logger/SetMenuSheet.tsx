@@ -10,6 +10,8 @@ import type { ClientSetType } from './types';
 interface SetMenuSheetProps {
   visible: boolean;
   onClose: () => void;
+  /** Runs once the sheet is gone, for an action that presents something else. */
+  onClosed?: () => void;
   title: string;
   subtitle?: string;
   /** Attached rows show only the actions, not the set types. */
@@ -72,6 +74,7 @@ const DeleteIcon = () => (
 export const SetMenuSheet: React.FC<SetMenuSheetProps> = ({
   visible,
   onClose,
+  onClosed,
   title,
   subtitle,
   attached,
@@ -83,7 +86,7 @@ export const SetMenuSheet: React.FC<SetMenuSheetProps> = ({
 }) => {
   const options = TYPE_OPTIONS.filter((o) => !o.flag || features[o.flag] || o.type === currentType);
   return (
-    <Sheet visible={visible} onClose={onClose} title={title} subtitle={subtitle}>
+    <Sheet visible={visible} onClose={onClose} onClosed={onClosed} title={title} subtitle={subtitle}>
       {!attached ? (
         <View style={styles.types}>
           <SectionLabel>SET TYPE</SectionLabel>

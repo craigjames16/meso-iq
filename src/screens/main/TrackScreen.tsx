@@ -14,6 +14,7 @@ import {
   DEFAULT_STARTING_SETS,
   daysSinceTrained,
   isMainSet,
+  planWeekDates,
   sessionTotals,
   toMuscle,
   volume,
@@ -197,6 +198,14 @@ export const TrackScreen: React.FC = () => {
   // --- This week -----------------------------------------------------------
 
   const currentWeek = cycle.data.weeks.find((w) => w.isCurrent);
+  // The slot that sits on today: the day in progress, else the one up next.
+  const currentDayNumber =
+    today.inProgress?.iteration === currentWeek?.iteration && today.inProgress?.dayNumber != null
+      ? today.inProgress.dayNumber
+      : next?.planInstance?.iterationNumber === currentWeek?.iteration
+        ? next?.planDay?.dayNumber ?? null
+        : null;
+  const weekDates = planWeekDates(currentWeek?.days ?? [], now, currentDayNumber);
   const weekCells: WeekCell[] = (currentWeek?.days ?? []).map((d) => {
     const isToday =
       !today.inProgress &&
@@ -204,17 +213,20 @@ export const TrackScreen: React.FC = () => {
       next?.planDay?.dayNumber === d.dayNumber;
     const name = d.workoutName ?? dayNames.get(d.dayNumber) ?? `Day ${d.dayNumber}`;
     const session = d.workoutInstanceId ? cycle.data.sessionById.get(d.workoutInstanceId) : undefined;
-    if (d.isRestDay) return { dayNumber: d.dayNumber, state: isToday ? 'today' : 'rest', name: 'Rest' };
+    const when = weekDates.get(d.dayNumber);
+    const dated = { date: when?.date ?? null, projected: when?.projected ?? false };
+    if (d.isRestDay) return { ...dated, dayNumber: d.dayNumber, state: isToday ? 'today' : 'rest', name: 'Rest' };
     if (d.state === 'done') {
       return {
+        ...dated,
         dayNumber: d.dayNumber,
         state: 'done',
         sets: session ? sessionTotals(session).hardSets : 0,
         name: dayNames.get(d.dayNumber) ?? name,
       };
     }
-    if (isToday) return { dayNumber: d.dayNumber, state: 'today', name: dayNames.get(d.dayNumber) ?? name };
-    return { dayNumber: d.dayNumber, state: d.state === 'missed' ? 'missed' : 'planned', name: dayNames.get(d.dayNumber) ?? name };
+    if (isToday) return { ...dated, dayNumber: d.dayNumber, state: 'today', name: dayNames.get(d.dayNumber) ?? name };
+    return { ...dated, dayNumber: d.dayNumber, state: d.state === 'missed' ? 'missed' : 'planned', name: dayNames.get(d.dayNumber) ?? name };
   });
   const trainingCells = (currentWeek?.days ?? []).filter((d) => !d.isRestDay);
   const weekDone = trainingCells.filter((d) => d.state === 'done').length;
@@ -230,23 +242,26 @@ export const TrackScreen: React.FC = () => {
   };
 
   return (
-    <Screen refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.text.secondary} />}>
-      <ScreenHeader
-        title="Today"
-        subtitle={formatLongDay(now)}
-        right={
-          <>
-            {streak > 0 ? (
-              <View style={styles.streak} accessible accessibilityLabel={`${streak} week streak`}>
-                <FlameGlyph />
-                <Text style={styles.streakText}>{streak} WK</Text>
-              </View>
-            ) : null}
-            <AvatarButton initial={user?.email ?? '?'} onPress={() => navigation.navigate('AccountSettings')} />
-          </>
-        }
-      />
-
+    <Screen
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.text.secondary} />}
+      header={
+        <ScreenHeader
+          title="Today"
+          subtitle={formatLongDay(now)}
+          right={
+            <>
+              {streak > 0 ? (
+                <View style={styles.streak} accessible accessibilityLabel={`${streak} week streak`}>
+                  <FlameGlyph />
+                  <Text style={styles.streakText}>{streak} WK</Text>
+                </View>
+              ) : null}
+              <AvatarButton initial={user?.email ?? '?'} onPress={() => navigation.navigate('AccountSettings')} />
+            </>
+          }
+        />
+      }
+    >
       {today.error ? <ErrorState onRetry={onRefresh} /> : null}
 
       {hero ? <TodayHero {...hero} /> : <Skeleton height={236} />}

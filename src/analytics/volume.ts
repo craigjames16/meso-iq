@@ -1,4 +1,4 @@
-import { isoWeekKey, shiftWeekKey } from './dates';
+import { addDays, startOfDay } from './dates';
 import { isHardSet, volume } from './sets';
 import { ALL_MUSCLES } from './types';
 import type { MesocycleProgressInput, Muscle, MuscleOf, Session, SetRecord } from './types';
@@ -11,33 +11,71 @@ function completed(sessions: Session[]): Session[] {
   return sessions.filter((s) => s.completedAt != null);
 }
 
-/** Hard sets per muscle per ISO week, keyed "YYYY-Www". Unknown exercises are skipped. */
-export function weeklyHardSets(sessions: Session[], muscleOf: MuscleOf): Map<string, Record<Muscle, number>> {
-  const weeks = new Map<string, Record<Muscle, number>>();
-  for (const session of completed(sessions)) {
-    const key = isoWeekKey(new Date(session.completedAt));
+/** Days in a rolling window. */
+export const ROLLING_DAYS = 7;
+
+export interface DateRange {
+  from: Date;
+  to: Date;
+}
+
+/**
+ * A rolling window of `ROLLING_DAYS` whole days, inclusive at both ends.
+ * `weeksBack` 0 is the window ending today, 1 the window before it. Windows
+ * are contiguous and never overlap, so a count and its predecessor cover the
+ * same span of days whatever weekday it is.
+ */
+export function rollingWindow(today: Date, weeksBack = 0): DateRange {
+  const to = addDays(startOfDay(today), -ROLLING_DAYS * weeksBack);
+  return { from: addDays(to, -(ROLLING_DAYS - 1)), to };
+}
+
+/** Completed sessions whose day falls inside `range`. */
+export function sessionsInRange(sessions: Session[], range: DateRange): Session[] {
+  const from = range.from.getTime();
+  const to = range.to.getTime();
+  return completed(sessions).filter((s) => {
+    const day = startOfDay(new Date(s.completedAt)).getTime();
+    return day >= from && day <= to;
+  });
+}
+
+/** Hard sets per muscle inside `range`. Unknown exercises are skipped. */
+export function hardSetsInRange(sessions: Session[], range: DateRange, muscleOf: MuscleOf): Record<Muscle, number> {
+  const out = emptyMuscleRecord();
+  for (const session of sessionsInRange(sessions, range)) {
     for (const s of session.sets) {
       if (!isHardSet(s)) continue;
       const muscle = muscleOf(s.exerciseId);
-      if (!muscle) continue;
-      const rec = weeks.get(key) ?? emptyMuscleRecord();
-      rec[muscle] += 1;
-      weeks.set(key, rec);
+      if (muscle) out[muscle] += 1;
     }
   }
-  return weeks;
+  return out;
 }
 
-/** Mean of the four weeks before `week`, not including it. Weeks with no sessions count as zero. */
-export function fourWeekAverage(weekly: Map<string, Record<Muscle, number>>, week: string): Record<Muscle, number> {
-  const out = emptyMuscleRecord();
-  for (let i = 1; i <= 4; i++) {
-    const rec = weekly.get(shiftWeekKey(week, -i));
-    if (!rec) continue;
-    for (const m of ALL_MUSCLES) out[m] += rec[m];
+/** Rolling windows behind the current one that set the baseline. */
+export const BASELINE_WINDOWS = 4;
+
+/**
+ * Hard sets per muscle in the last seven days, with the mean of the four
+ * windows behind it as the baseline. The current window and each baseline
+ * window cover the same number of days, so the pair reads the same on any
+ * weekday instead of resetting on Monday. A window with no sessions counts as
+ * zero, which pulls the baseline down when history is shorter than 35 days.
+ */
+export function rollingHardSets(
+  sessions: Session[],
+  today: Date,
+  muscleOf: MuscleOf,
+): { current: Record<Muscle, number>; baseline: Record<Muscle, number>; window: DateRange } {
+  const window = rollingWindow(today);
+  const baseline = emptyMuscleRecord();
+  for (let i = 1; i <= BASELINE_WINDOWS; i++) {
+    const rec = hardSetsInRange(sessions, rollingWindow(today, i), muscleOf);
+    for (const m of ALL_MUSCLES) baseline[m] += rec[m];
   }
-  for (const m of ALL_MUSCLES) out[m] /= 4;
-  return out;
+  for (const m of ALL_MUSCLES) baseline[m] /= BASELINE_WINDOWS;
+  return { current: hardSetsInRange(sessions, window, muscleOf), baseline, window };
 }
 
 function hardSetsInIteration(progress: MesocycleProgressInput, iteration: number, muscleOf: MuscleOf): Record<Muscle, number> {

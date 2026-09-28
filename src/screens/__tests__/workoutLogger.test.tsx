@@ -69,7 +69,8 @@ describe('Workout logger', () => {
     expect(text).toContain('Sept-3D · Week 1 · Day 5');
     expect(text).toContain('TARGET RIR 2');
     expect(text).toContain('Finish workout · 1 of 3 sets');
-    expect(text).toContain('Last 130 × 14');
+    expect(text).toContain('Last 130');
+    expect(text).toContain('Last 14');
 
     // Step 1: check set 2 with nothing typed. It logs last time's weight and one more rep.
     await press(byLabel(r.root, 'Mark set 2 logged'));

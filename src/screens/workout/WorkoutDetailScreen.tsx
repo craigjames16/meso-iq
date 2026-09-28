@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, Animated, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -29,6 +29,7 @@ import {
   ChevronGlyph,
   EmptyState,
   ErrorState,
+  GlassBackdrop,
   IconButton,
   MenuAction,
   MenuGroup,
@@ -47,6 +48,15 @@ type WorkoutDetailRoute = RouteProp<RootStackParamList, 'WorkoutDetail'>;
 type WorkoutDetailNavigation = NativeStackNavigationProp<RootStackParamList, 'WorkoutDetail'>;
 
 const EMPTY_DETAIL: ExerciseDetailData = { history: [], lastVolume: null, lastSets: [] };
+
+/** The nav row's height. It holds the first frame in place until the header measures itself. */
+const HEADER_ESTIMATE = 46;
+
+/**
+ * Scroll distance over which the progress card hands off to the header: the card
+ * fades as it travels under the header, and the line and RIR pill fade in behind it.
+ */
+const HANDOFF = 56;
 
 function errorText(err: unknown, fallback: string): string {
   return err instanceof Error ? err.message : fallback;
@@ -75,8 +85,11 @@ export const WorkoutDetailScreen: React.FC = () => {
   const [completing, setCompleting] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [optionsOpen, setOptionsOpen] = useState(false);
+  const [afterOptions, setAfterOptions] = useState<'add' | 'finish' | null>(null);
   const [setMenu, setSetMenu] = useState<{ exerciseIndex: number; setIndex: number } | null>(null);
   const [edited, setEdited] = useState(false);
+  const [headerHeight, setHeaderHeight] = useState<number | null>(null);
+  const scrollY = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     loadWorkoutData(workoutInstanceId);
@@ -221,6 +234,16 @@ export const WorkoutDetailScreen: React.FC = () => {
 
   const closeSetMenu = () => setSetMenu(null);
 
+  // The confirmation for dropping attached sets waits for the set menu to go,
+  // for the same reason the workout menu's actions do.
+  const afterSetMenu = useRef<(() => void) | null>(null);
+
+  const runAfterSetMenu = () => {
+    const fn = afterSetMenu.current;
+    afterSetMenu.current = null;
+    fn?.();
+  };
+
   const handleChooseType = (setType: ClientSetType) => {
     if (!setMenu) return;
     const { exerciseIndex, setIndex } = setMenu;
@@ -238,14 +261,15 @@ export const WorkoutDetailScreen: React.FC = () => {
     const apply = () => commit(exerciseIndex, next, removed, retyped);
 
     if (setType === 'REGULAR' && removed.length > 0) {
-      Alert.alert(
-        'Make this a straight set?',
-        `This removes ${removed.length} attached ${removed.length === 1 ? 'set' : 'sets'}.`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Remove', style: 'destructive', onPress: apply },
-        ],
-      );
+      afterSetMenu.current = () =>
+        Alert.alert(
+          'Make this a straight set?',
+          `This removes ${removed.length} attached ${removed.length === 1 ? 'set' : 'sets'}.`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Remove', style: 'destructive', onPress: apply },
+          ],
+        );
     } else {
       apply();
     }
@@ -337,6 +361,21 @@ export const WorkoutDetailScreen: React.FC = () => {
     }
   };
 
+  // Every option in the menu opens something else: another sheet, or an alert.
+  // iOS drops a presentation that begins while the menu is still being
+  // dismissed, leaving an invisible modal that swallows every touch, so the
+  // chosen action waits until the sheet is gone.
+  const chooseOption = (next: 'add' | 'finish') => {
+    setAfterOptions(next);
+    setOptionsOpen(false);
+  };
+
+  const runAfterOptions = () => {
+    setAfterOptions(null);
+    if (afterOptions === 'add') setAddOpen(true);
+    else if (afterOptions === 'finish') handleFinish();
+  };
+
   const handleFinish = () => {
     const unchecked = progress.total - progress.done;
     if (unchecked > 0) {
@@ -403,38 +442,27 @@ export const WorkoutDetailScreen: React.FC = () => {
   const loadingFirst = (loading || trackingsLoading) && trackings.length === 0;
   const pct = progress.total > 0 ? progress.done / progress.total : 0;
 
+  // One scroll position drives both halves of the handoff, so the card can't
+  // fade out before the line it turns into has arrived.
+  const cardOpacity = scrollY.interpolate({ inputRange: [0, HANDOFF * 0.8], outputRange: [1, 0], extrapolate: 'clamp' });
+  // The material has to be there before the card is behind the title, so it
+  // fades over the header's bottom padding — the gap between the two.
+  const chrome = scrollY.interpolate({ inputRange: [0, space.cardGap], outputRange: [0, 1], extrapolate: 'clamp' });
+  const compact = scrollY.interpolate({ inputRange: [HANDOFF * 0.35, HANDOFF], outputRange: [0, 1], extrapolate: 'clamp' });
+  const headerInset = headerHeight ?? insets.top + space.screenTop + HEADER_ESTIMATE;
+  const onHeaderLayout = (event: LayoutChangeEvent) => setHeaderHeight(event.nativeEvent.layout.height);
+
   return (
     <View style={styles.root}>
-      <ScrollView
+      <Animated.ScrollView
         style={styles.root}
-        contentContainerStyle={[styles.content, { paddingTop: insets.top + space.screenTop, paddingBottom: 110 + insets.bottom }]}
+        contentContainerStyle={[styles.content, { paddingTop: headerInset, paddingBottom: 110 + insets.bottom }]}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         automaticallyAdjustKeyboardInsets
+        onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })}
+        scrollEventThrottle={16}
       >
-        <View style={styles.nav}>
-          <IconButton
-            icon={<ChevronGlyph direction="left" size={16} color={colors.text.body} strokeWidth={2} />}
-            onPress={isCompleted ? handleDone : () => navigation.goBack()}
-            accessibilityLabel="Back"
-            size={34}
-          />
-          <View style={styles.navTitles}>
-            <Text style={styles.title} numberOfLines={1} accessibilityRole="header">
-              {title}
-            </Text>
-            <Text style={styles.meta} numberOfLines={1}>
-              {isCompleted ? `${meta} · Editing a finished workout` : meta}
-            </Text>
-          </View>
-          <IconButton
-            icon={<MoreGlyph color={colors.text.secondary} />}
-            onPress={() => setOptionsOpen(true)}
-            accessibilityLabel="Workout options"
-            size={34}
-          />
-        </View>
-
         {error && trackings.length === 0 ? (
           <ErrorState onRetry={reload} />
         ) : loadingFirst ? (
@@ -445,18 +473,20 @@ export const WorkoutDetailScreen: React.FC = () => {
           </>
         ) : (
           <>
-            <Card padding={14} gap={10}>
-              <View style={styles.stripRow}>
-                {rir != null ? <Tag label={`TARGET RIR ${rir}`} /> : null}
-                <View style={styles.flex} />
-                <Text style={styles.stripCount}>
-                  <Text style={styles.stripDone}>{progress.done}</Text> of {progress.total} sets
-                </Text>
-              </View>
-              <View style={styles.track} accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: progress.total, now: progress.done }}>
-                <View style={[styles.fill, { width: `${Math.round(pct * 100)}%` }]} />
-              </View>
-            </Card>
+            <Animated.View style={{ opacity: cardOpacity }}>
+              <Card padding={14} gap={10}>
+                <View style={styles.stripRow}>
+                  {rir != null ? <Tag label={`TARGET RIR ${rir}`} /> : null}
+                  <View style={styles.flex} />
+                  <Text style={styles.stripCount}>
+                    <Text style={styles.stripDone}>{progress.done}</Text> of {progress.total} sets
+                  </Text>
+                </View>
+                <View style={styles.track} accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: progress.total, now: progress.done }}>
+                  <View style={[styles.fill, { width: `${Math.round(pct * 100)}%` }]} />
+                </View>
+              </Card>
+            </Animated.View>
 
             {trackings.length === 0 ? (
               <EmptyState message="No exercises yet. Add one to start logging." action={{ label: 'Add exercise', onPress: () => setAddOpen(true) }} />
@@ -487,7 +517,54 @@ export const WorkoutDetailScreen: React.FC = () => {
             ) : null}
           </>
         )}
-      </ScrollView>
+      </Animated.ScrollView>
+
+      <View
+        style={[styles.header, { paddingTop: insets.top + space.screenTop }]}
+        onLayout={onHeaderLayout}
+        pointerEvents="box-none"
+      >
+        <GlassBackdrop opacity={chrome} />
+        <View style={styles.nav}>
+          <IconButton
+            icon={<ChevronGlyph direction="left" size={16} color={colors.text.primary} strokeWidth={2} />}
+            onPress={isCompleted ? handleDone : () => navigation.goBack()}
+            accessibilityLabel="Back"
+            variant="glass"
+            size={34}
+          />
+          <View style={styles.navTitles}>
+            <Text style={styles.title} numberOfLines={1} accessibilityRole="header">
+              {title}
+            </Text>
+            <Text style={styles.meta} numberOfLines={1}>
+              {isCompleted ? `${meta} · Editing a finished workout` : meta}
+            </Text>
+          </View>
+          {rir != null ? (
+            <Animated.View style={{ opacity: compact }} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+              <Tag label={`RIR ${rir}`} size="small" />
+            </Animated.View>
+          ) : null}
+          <IconButton
+            icon={<MoreGlyph color={colors.text.primary} />}
+            onPress={() => setOptionsOpen(true)}
+            accessibilityLabel="Workout options"
+            variant="glass"
+            size={34}
+          />
+        </View>
+        {progress.total > 0 ? (
+          <Animated.View
+            style={[styles.line, { opacity: compact }]}
+            pointerEvents="none"
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+          >
+            <View style={[styles.lineFill, { width: `${Math.round(pct * 100)}%` }]} />
+          </Animated.View>
+        ) : null}
+      </View>
 
       {trackings.length > 0 ? (
         <View style={[styles.footer, { paddingBottom: 12 + insets.bottom }]}>
@@ -504,23 +581,17 @@ export const WorkoutDetailScreen: React.FC = () => {
         </View>
       ) : null}
 
-      <Sheet visible={optionsOpen} onClose={() => setOptionsOpen(false)} title={title} subtitle={meta}>
+      <Sheet
+        visible={optionsOpen}
+        onClose={() => setOptionsOpen(false)}
+        onClosed={runAfterOptions}
+        title={title}
+        subtitle={meta}
+      >
         <MenuGroup>
-          <MenuAction
-            label="Add exercise"
-            onPress={() => {
-              setOptionsOpen(false);
-              setAddOpen(true);
-            }}
-          />
+          <MenuAction label="Add exercise" onPress={() => chooseOption('add')} />
           {!isCompleted && trackings.length > 0 ? (
-            <MenuAction
-              label="Finish workout"
-              onPress={() => {
-                setOptionsOpen(false);
-                handleFinish();
-              }}
-            />
+            <MenuAction label="Finish workout" onPress={() => chooseOption('finish')} />
           ) : null}
         </MenuGroup>
       </Sheet>
@@ -528,6 +599,7 @@ export const WorkoutDetailScreen: React.FC = () => {
       <SetMenuSheet
         visible={!!menuSet}
         onClose={closeSetMenu}
+        onClosed={runAfterSetMenu}
         title={menuLabel}
         subtitle={[menuTracking?.exerciseName, menuValues].filter(Boolean).join(' · ')}
         attached={!!menuSet && isAttached(menuSet)}
@@ -558,6 +630,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.gutter,
     gap: space.cardGap,
   },
+  header: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: space.gutter,
+    paddingBottom: space.cardGap,
+  },
   nav: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -574,9 +654,11 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
     color: colors.text.primary,
   },
+  // Vibrancy: legible where content scrolls, blurred, behind the header.
   meta: {
     ...type.metaSmall,
-    color: colors.text.muted,
+    fontWeight: '500',
+    color: colors.text.secondary,
   },
   stripRow: {
     flexDirection: 'row',
@@ -603,6 +685,18 @@ const styles = StyleSheet.create({
   fill: {
     height: 6,
     borderRadius: radius.cell,
+    backgroundColor: colors.success.base,
+  },
+  line: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 2,
+    backgroundColor: colors.border.track,
+  },
+  lineFill: {
+    height: 2,
     backgroundColor: colors.success.base,
   },
   footer: {

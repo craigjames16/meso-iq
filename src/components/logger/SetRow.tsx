@@ -184,9 +184,16 @@ export const SetRow: React.FC<SetRowProps> = ({
         </Pressable>
       </View>
       {last ? (
-        <Text style={[styles.last, completed && styles.lastDone]}>
-          Last {formatWeight(last.weight) || '0'} × {last.reps}
-        </Text>
+        <View style={styles.lastLine}>
+          <View style={styles.lastBadgeSpacer} />
+          <Text style={[styles.last, completed && styles.lastDone]}>
+            Last {formatWeight(last.weight) || '0'}
+          </Text>
+          <View style={styles.lastTimesSpacer} />
+          <Text style={[styles.last, completed && styles.lastDone]}>Last {last.reps}</Text>
+          <View style={styles.lastCheckSpacer} />
+          <View style={styles.lastMenuSpacer} />
+        </View>
       ) : null}
     </Animated.View>
   );
@@ -270,11 +277,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  // Mirrors `line` so each hint sits centred under its own field.
+  lastLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingTop: 3,
+  },
+  lastBadgeSpacer: {
+    minWidth: 26,
+  },
+  lastTimesSpacer: {
+    width: 10,
+  },
+  lastCheckSpacer: {
+    width: 30,
+  },
+  lastMenuSpacer: {
+    width: 20,
+  },
   last: {
     ...type.caption,
     color: colors.text.faint,
-    paddingTop: 3,
-    paddingLeft: 34,
+    flex: 1,
+    minWidth: 0,
+    textAlign: 'center',
     ...tabularNums,
   },
   lastDone: {

@@ -45,9 +45,12 @@ const styles = StyleSheet.create({
     ...type.tabTitle,
     color: colors.text.primary,
   },
+  // Vibrancy: the header is translucent, so the subtitle carries more contrast
+  // and weight than flat muted gray would over blurred content.
   subtitle: {
     ...type.meta,
-    color: colors.text.muted,
+    fontWeight: '500',
+    color: colors.text.secondary,
   },
   right: {
     flexDirection: 'row',

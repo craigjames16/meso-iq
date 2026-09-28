@@ -5,10 +5,9 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/AppNavigator';
 import {
   ALL_MUSCLES,
-  fourWeekAverage,
   hardSetsByExercise,
-  isoWeekKey,
-  weeklyHardSets,
+  rollingHardSets,
+  sessionsInRange,
   type Muscle,
 } from '../../analytics';
 import { useCycleStats, type StrengthRow } from '../../hooks/useCycleStats';
@@ -41,9 +40,9 @@ interface CycleTabProps {
   onGoToPlan: () => void;
 }
 
-function countDelta(value: number, avg: number): { label: string; color: string } {
-  const d = Math.round(value - avg);
-  if (Math.abs(value - avg) < 0.5 || d === 0) return { label: '—', color: colors.text.muted };
+function countDelta(value: number, reference: number): { label: string; color: string } {
+  const d = Math.round(value - reference);
+  if (Math.abs(value - reference) < 0.5 || d === 0) return { label: '—', color: colors.text.muted };
   return d > 0 ? { label: `+${d}`, color: colors.success.pillText } : { label: `−${Math.abs(d)}`, color: colors.danger.base };
 }
 
@@ -56,16 +55,16 @@ export const CycleTab: React.FC<CycleTabProps> = ({ mesocycleId, hasCycles, onGo
   const { sessions, muscleOf } = history.data;
   const d = stats.data;
 
-  const thisWeek = useMemo(() => {
-    const week = isoWeekKey(new Date());
-    const weekly = weeklyHardSets(sessions, muscleOf);
-    const current = weekly.get(week);
-    const avg = fourWeekAverage(weekly, week);
-    const rows = ALL_MUSCLES.map((m) => ({ muscle: m, count: current?.[m] ?? 0, avg: avg[m] }))
+  const rolling = useMemo(() => {
+    const { current, baseline, window } = rollingHardSets(sessions, new Date(), muscleOf);
+    const rows = ALL_MUSCLES.map((m) => ({ muscle: m, count: current[m], avg: baseline[m] }))
       .filter((r) => r.count > 0 || r.avg > 0)
       .sort((a, b) => b.count - a.count || b.avg - a.avg);
-    const weekSessions = sessions.filter((s) => isoWeekKey(new Date(s.completedAt)) === week);
-    return { rows, weekSessions, max: Math.max(1, ...rows.map((r) => Math.max(r.count, r.avg))) };
+    return {
+      rows,
+      windowSessions: sessionsInRange(sessions, window),
+      max: Math.max(1, ...rows.map((r) => Math.max(r.count, r.avg))),
+    };
   }, [sessions, muscleOf]);
 
   if (!hasCycles) {
@@ -125,11 +124,11 @@ export const CycleTab: React.FC<CycleTabProps> = ({ mesocycleId, hasCycles, onGo
 
   const barExercises =
     barMuscle != null
-      ? [...hardSetsByExercise(thisWeek.weekSessions, barMuscle, muscleOf).entries()]
+      ? [...hardSetsByExercise(rolling.windowSessions, barMuscle, muscleOf).entries()]
           .map(([id, n]) => ({
             id,
             n,
-            name: thisWeek.weekSessions.find((s) => s.exerciseNames?.[id])?.exerciseNames?.[id] ?? 'Exercise',
+            name: rolling.windowSessions.find((s) => s.exerciseNames?.[id])?.exerciseNames?.[id] ?? 'Exercise',
           }))
           .sort((a, b) => b.n - a.n)
       : [];
@@ -158,18 +157,18 @@ export const CycleTab: React.FC<CycleTabProps> = ({ mesocycleId, hasCycles, onGo
       ) : null}
 
       <Card padding={16} gap={14}>
-        <CardTitle title="Working sets this week" subtitle="Sets, not volume, comparable across muscles" info="hardSets" />
-        {thisWeek.rows.length === 0 ? (
-          <Text style={styles.empty}>No working sets logged this week yet.</Text>
+        <CardTitle title="Working sets, last 7 days" subtitle="Comparable across muscles" info="hardSets" />
+        {rolling.rows.length === 0 ? (
+          <Text style={styles.empty}>No working sets logged in the last 7 days.</Text>
         ) : (
           <View style={styles.bars}>
-            {thisWeek.rows.map((r) => (
+            {rolling.rows.map((r) => (
               <BarRow
                 key={r.muscle}
                 label={muscleLabel(r.muscle).toUpperCase()}
                 labelWidth={78}
                 value={r.count}
-                max={thisWeek.max}
+                max={rolling.max}
                 tick={r.avg}
                 delta={countDelta(r.count, r.avg)}
                 onPress={() => setBarMuscle(r.muscle)}
@@ -180,7 +179,7 @@ export const CycleTab: React.FC<CycleTabProps> = ({ mesocycleId, hasCycles, onGo
         )}
         <View style={styles.caption}>
           <View style={styles.tickKey} />
-          <Text style={styles.captionText}>Tick = your 4-week average. Tap a bar for the exercises behind it.</Text>
+          <Text style={styles.captionText}>Tick = your average for the previous 4 weeks. Tap a bar for the exercises behind it.</Text>
         </View>
       </Card>
 
@@ -239,11 +238,11 @@ export const CycleTab: React.FC<CycleTabProps> = ({ mesocycleId, hasCycles, onGo
       <Sheet
         visible={barMuscle != null}
         onClose={() => setBarMuscle(null)}
-        title={barMuscle ? `${muscleLabel(barMuscle)} this week` : ''}
+        title={barMuscle ? `${muscleLabel(barMuscle)}, last 7 days` : ''}
         subtitle="Working sets per exercise"
       >
         <View>
-          {barExercises.length === 0 ? <Text style={styles.empty}>No working sets this week yet.</Text> : null}
+          {barExercises.length === 0 ? <Text style={styles.empty}>No working sets in the last 7 days.</Text> : null}
           {barExercises.map((e, i) => (
             <ListRow
               key={e.id}

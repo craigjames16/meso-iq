@@ -51,7 +51,7 @@ export const colors = {
     fieldText: '#C4F0D6',
     badgeBg: '#194430',
     badgeText: '#8FE3B4',
-    lastText: '#5E9B7B', // "Last 130 × 14" under a completed row
+    lastText: '#5E9B7B', // the "Last" hints under a completed row
     pillBg: '#17321F',
     pillBorder: '#2A5436',
     pillText: '#6FD9A2',
@@ -75,6 +75,7 @@ export const glass = {
     { offset: 0.66, color: '#FFFFFF', opacity: 0.02 },
     { offset: 1, color: '#FFFFFF', opacity: 0.2 },
   ],
+  chromeFill: 'rgba(11,11,13,0.86)', // pinned headers where the OS glass material isn't available
   sheen: 'rgba(255,255,255,0.11)',
   innerHighlight: 'rgba(255,255,255,0.14)',
   todayFill: 'rgba(250,250,250,0.10)',

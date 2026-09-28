@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Button, IconButton, MenuAction, MenuGroup, MoreGlyph, Sheet } from '../ui';
 import { colors, radius, space, type } from '../../theme';
@@ -80,9 +80,20 @@ export const ExerciseCard: React.FC<ExerciseCardProps> = ({
     : `${progress.done} of ${progress.total} sets${doneVolume > 0 ? ` · ${formatNumber(doneVolume)} lb so far` : ''}`;
   const parents = parentTypes(sets);
 
+  // An action runs once the menu is gone. iOS drops an alert or a screen that
+  // is presented while a sheet is still being dismissed, and the app is left
+  // with an invisible modal over it that swallows every touch.
+  const pending = useRef<(() => void) | null>(null);
+
   const close = (fn: () => void) => () => {
+    pending.current = fn;
     setMenuOpen(false);
-    fn();
+  };
+
+  const runPending = () => {
+    const fn = pending.current;
+    pending.current = null;
+    fn?.();
   };
 
   return (
@@ -166,7 +177,12 @@ export const ExerciseCard: React.FC<ExerciseCardProps> = ({
 
       {editable ? <Button label="+ Add set" variant="dashed" size="small" onPress={onAddSet} full /> : null}
 
-      <Sheet visible={menuOpen} onClose={() => setMenuOpen(false)} title={tracking.exerciseName}>
+      <Sheet
+        visible={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        onClosed={runPending}
+        title={tracking.exerciseName}
+      >
         <MenuGroup>
           {editable && index > 0 ? <MenuAction label="Move up" onPress={close(() => onMove('up'))} /> : null}
           {editable && index < total - 1 ? <MenuAction label="Move down" onPress={close(() => onMove('down'))} /> : null}

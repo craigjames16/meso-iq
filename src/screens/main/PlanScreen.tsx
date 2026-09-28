@@ -69,12 +69,23 @@ export const PlanScreen: React.FC = () => {
   };
 
   return (
-    <Screen refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.text.secondary} />}>
-      <ScreenHeader
-        title="Plan"
-        right={<IconButton icon={<PlusGlyph color={colors.text.body} />} onPress={() => setNewOpen(true)} accessibilityLabel="New program" size={34} />}
-      />
-
+    <Screen
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.text.secondary} />}
+      header={
+        <ScreenHeader
+          title="Plan"
+          right={
+            <IconButton
+              icon={<PlusGlyph color={colors.text.primary} />}
+              onPress={() => setNewOpen(true)}
+              accessibilityLabel="New program"
+              variant="glass"
+              size={34}
+            />
+          }
+        />
+      }
+    >
       {active ? (
         <Card variant="hero" gap={10}>
           <View style={styles.cycleHead}>

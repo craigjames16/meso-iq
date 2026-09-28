@@ -35,7 +35,7 @@ describe('Data tab', () => {
     const text = textOf(r.root);
     expect(text).toContain('WEEK 2 OF 5 · RIR 2');
     expect(text).toContain('PPL · 4 of 5 days logged');
-    expect(text).toContain('Working sets this week');
+    expect(text).toContain('Working sets, last 7 days');
     expect(text).toContain('CHEST');
     expect(text).toContain('Strength trend');
     expect(text).toContain('Cable Flyes');
@@ -96,11 +96,11 @@ describe('Data tab', () => {
 
   it('a chart info button opens a sheet defining the metric', async () => {
     const r = await openTab('Cycle');
-    await press(byLabel(r.root, 'About Working sets this week'));
+    await press(byLabel(r.root, 'About Working sets, last 7 days'));
     const text = textOf(r.root);
-    expect(text).toContain('Each bar is the number of working sets you have logged for that muscle since Monday.');
+    expect(text).toContain('Each bar is the number of working sets you have logged for that muscle over the last 7 days, today included.');
     expect(text).toContain('Tick');
-    expect(text).toContain('Your average for that muscle over the previous four weeks, not including this one.');
+    expect(text).toContain('Your average for that muscle over the four 7-day windows before this one');
     await act(async () => r.unmount());
   });
 });

@@ -1,4 +1,7 @@
 export { Screen } from './Screen';
+export { GlassBackdrop } from './GlassBackdrop';
+export { GlassRim } from './GlassRim';
+export { ScrollEdge, SCROLL_EDGE_HEIGHT } from './ScrollEdge';
 export { ScreenHeader } from './ScreenHeader';
 export { DetailHeader } from './DetailHeader';
 export { Card } from './Card';

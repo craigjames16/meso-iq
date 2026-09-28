@@ -44,3 +44,48 @@ export function monthStarts(weeks: (Date | null)[][]): { index: number; month: n
   });
   return out;
 }
+
+export interface PlanDayDate {
+  /** The calendar day the slot fell on, or is expected to fall on. */
+  date: Date;
+  /** True when the date is projected forward rather than read from a finished session. */
+  projected: boolean;
+}
+
+/**
+ * Calendar dates for one plan week's day slots, keyed by `dayNumber`.
+ *
+ * Plan days are slots in a rotation, not weekdays, and the API stores no
+ * scheduled date for them. A finished day carries its own date. The rest are
+ * projected one calendar day per slot from an anchor: `currentDayNumber` on
+ * `today` when there is one, otherwise the latest finished day. With neither,
+ * the map is empty, because nothing fixes the rotation to the calendar.
+ */
+export function planWeekDates(
+  days: { dayNumber: number; completedAt: string | null }[],
+  today: Date,
+  currentDayNumber: number | null,
+): Map<number, PlanDayDate> {
+  const out = new Map<number, PlanDayDate>();
+  const done = days
+    .filter((d) => d.completedAt != null)
+    .map((d) => ({ dayNumber: d.dayNumber, date: startOfDay(new Date(d.completedAt!)) }));
+  for (const d of done) out.set(d.dayNumber, { date: d.date, projected: false });
+
+  const latest = done.reduce<(typeof done)[number] | null>((a, b) => (!a || b.dayNumber > a.dayNumber ? b : a), null);
+  const anchor =
+    currentDayNumber != null
+      ? { dayNumber: currentDayNumber, date: startOfDay(today) }
+      : latest
+        ? { dayNumber: latest.dayNumber, date: latest.date }
+        : null;
+  if (!anchor) return out;
+
+  for (const d of days) {
+    if (out.has(d.dayNumber)) continue;
+    const offset = d.dayNumber - anchor.dayNumber;
+    // The anchor slot sits on a known date; only the slots around it are projected.
+    out.set(d.dayNumber, { date: addDays(anchor.date, offset), projected: offset !== 0 });
+  }
+  return out;
+}

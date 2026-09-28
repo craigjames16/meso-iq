@@ -2,6 +2,7 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Card, CardTitle } from '../ui';
 import { colors, glass, radius, tabularNums, type, size } from '../../theme';
+import { weekdayLong, weekdayShort } from '../../utils/format';
 
 export interface WeekCell {
   dayNumber: number;
@@ -9,6 +10,10 @@ export interface WeekCell {
   /** Working sets when done. */
   sets?: number;
   name: string;
+  /** The day this slot fell on, or is expected to fall on. Null when unknown. */
+  date?: Date | null;
+  /** True when `date` is projected forward rather than read from a finished session. */
+  projected?: boolean;
 }
 
 export const ThisWeek: React.FC<{ cells: WeekCell[]; done: number; total: number }> = ({ cells, done, total }) => (
@@ -19,9 +24,26 @@ export const ThisWeek: React.FC<{ cells: WeekCell[]; done: number; total: number
         // Done days lead with their working-set count; others lead with the day's name.
         const top = c.state === 'done' ? String(c.sets ?? 0) : c.state === 'rest' ? '—' : c.name;
         const bottom = { done: c.name, rest: 'Rest', today: 'Today', planned: 'Plan', missed: 'Missed' }[c.state];
+        // Plan days are slots in a rotation, so a weekday is known for finished
+        // days and projected for the rest. Fall back to the slot number.
+        const weekday = c.date ? weekdayShort(c.date.getDay()).toUpperCase() : String(c.dayNumber);
+        const when = c.date ? `${c.projected ? 'expected ' : ''}${weekdayLong(c.date.getDay())}` : '';
         return (
-          <View key={c.dayNumber} style={styles.col} accessible accessibilityLabel={`Day ${c.dayNumber}: ${c.state === 'done' ? `${c.name}, ${c.sets} working sets` : `${top}, ${bottom}`}`}>
-            <Text style={styles.letter}>{c.dayNumber}</Text>
+          <View
+            key={c.dayNumber}
+            style={styles.col}
+            accessible
+            accessibilityLabel={[
+              `Day ${c.dayNumber}`,
+              when,
+              c.state === 'done' ? `${c.name}, ${c.sets} working sets` : `${top}, ${bottom}`,
+            ]
+              .filter(Boolean)
+              .join(', ')}
+          >
+            <Text style={styles.letter} numberOfLines={1}>
+              {weekday}
+            </Text>
             <View style={[styles.cell, styles[c.state]]}>
               <Text style={[styles.top, topStyle[c.state]]} numberOfLines={1}>
                 {top}

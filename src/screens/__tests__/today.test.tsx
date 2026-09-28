@@ -1,6 +1,7 @@
 import { act } from 'react-test-renderer';
 import { TrackScreen } from '../main/TrackScreen';
 import { press, pressText, renderScreen, textOf, unlabelledPressables } from '../../testing/render';
+import { weekdayLong, weekdayShort } from '../../utils/format';
 import { meso, pushSession, upcomingPush } from '../../testing/fixtures';
 import { workoutService } from '../../services/workoutService';
 import { plansService } from '../../services/plansService';
@@ -57,6 +58,33 @@ describe('Today', () => {
     expect(text).toContain('1 WK');
     expect(text).not.toMatch(/min|timer|duration/i);
     expect(unlabelledPressables(r.root)).toEqual([]);
+    await act(async () => r.unmount());
+  });
+
+  it('labels This week with weekdays: the real day for finished days, a projection for the rest', async () => {
+    ws.getLatestWorkout.mockResolvedValue({ inProgress: false, mesocycleId: 3, mesocycle: meso } as any);
+    ws.getUpcoming.mockResolvedValue({ upcomingDays: [upcomingPush] } as any);
+    ws.getHistory.mockResolvedValue({ workoutInstances: [pushSession] } as any);
+    const r = await render();
+    // Week 2 of the fixture: day 1 finished 2 days ago, day 2 rests, day 3 is up next today.
+    const dayAgo = (n: number) => {
+      const d = new Date();
+      d.setDate(d.getDate() - n);
+      return d.getDay();
+    };
+    const labels = [
+      ...new Set(
+        r.root
+          .findAll((n) => typeof n.props.accessibilityLabel === 'string' && n.props.accessibilityLabel.startsWith('Day '))
+          .map((n) => n.props.accessibilityLabel as string),
+      ),
+    ];
+    expect(labels[0]).toBe(`Day 1, ${weekdayLong(dayAgo(2))}, Day 1, 0 working sets`);
+    expect(labels[1]).toBe(`Day 2, expected ${weekdayLong(dayAgo(1))}, \u2014, Rest`);
+    expect(labels[2]).toBe(`Day 3, ${weekdayLong(dayAgo(0))}, Push, Today`);
+    const text = textOf(r.root);
+    expect(text).toContain(weekdayShort(dayAgo(2)).toUpperCase());
+    expect(text).toContain(weekdayShort(dayAgo(0)).toUpperCase());
     await act(async () => r.unmount());
   });
 

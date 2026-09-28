@@ -172,14 +172,18 @@ For each exercise, compare the top-set e1RM in its first logged iteration with i
 
 ## Volume
 
-### Weekly hard sets per muscle
+### Rolling hard sets per muscle
 
 ```ts
-export function weeklyHardSets(sessions: Session[], muscleOf: (exerciseId: number) => Muscle | undefined): Map<string, Record<Muscle, number>>;
-export function fourWeekAverage(weekly: Map<string, Record<Muscle, number>>, week: string): Record<Muscle, number>;
+export function rollingWindow(today: Date, weeksBack?: number): { from: Date; to: Date };
+export function sessionsInRange(sessions: Session[], range: { from: Date; to: Date }): Session[];
+export function hardSetsInRange(sessions: Session[], range: { from: Date; to: Date }, muscleOf: (exerciseId: number) => Muscle | undefined): Record<Muscle, number>;
+export function rollingHardSets(sessions: Session[], today: Date, muscleOf: (exerciseId: number) => Muscle | undefined): { current: Record<Muscle, number>; baseline: Record<Muscle, number>; window: { from: Date; to: Date } };
 ```
 
-Weeks are ISO weeks starting Monday, keyed `YYYY-Www`, in the device time zone. `fourWeekAverage` averages the four weeks before `week`, not including it. Weeks with no sessions count as zero. The Cycle screen shows this week's count as a bar with the average as a tick.
+A *rolling window* is seven whole days in the device time zone, inclusive at both ends. `weeksBack` 0 is the window ending today, 1 is the window before it, and so on, so the windows are contiguous and never overlap. `rollingHardSets` returns the current window's count per muscle, plus `baseline`: the mean of the four windows behind it, which is 28 days of history ending the day before the current window opens. A window with no sessions counts as zero, so a baseline built on less than 35 days of history reads low. The Cycle screen shows the current count as a bar with the baseline as a tick.
+
+The current window and each baseline window cover the same number of days on any weekday, which frees you from reading a partial week against complete ones. The cost is that the window smooths the step into a deload: it still holds days from the hard week for up to six days after the deload starts.
 
 ### Cycle radar
 
@@ -307,8 +311,10 @@ Each function gets a test file. Cover at least these cases:
 - **`liftRecords`**: tie-breaks; `bestSessionVolume` includes drop sets.
 - **`isStalled`**: false under 4 points; true for flat; false for a 0.6% gain; true for a 0.4% gain.
 - **`overloadRate`**: `null` under 3 points; positive slope for rising data; ignores points outside the window.
-- **`weeklyHardSets`**: a Sunday session lands in the week that started the Monday before; attached sets don't count; unknown exercises are skipped.
-- **`fourWeekAverage`**: excludes the current week; counts empty weeks as zero.
+- **`rollingWindow`**: covers seven whole days ending today; the preceding window sits immediately before it without overlap.
+- **`sessionsInRange`**: includes both end days whatever time of day the session finished.
+- **`hardSetsInRange`**: attached sets don't count; unknown exercises are skipped.
+- **`rollingHardSets`**: averages the four windows behind the current one; the baseline ends where the current window opens and starts 35 days back; an empty window counts as zero.
 - **`adherence`**: skipped earlier days count as missed; future weeks aren't due; rest days are ignored.
 - **`weekStreak`**: an empty current week doesn't break the streak; a gap week does.
 - **`repRangeShare`**: bucket boundaries at 5, 8, 12, 15 and 16; the shares sum to 1.

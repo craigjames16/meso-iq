@@ -3,9 +3,9 @@ import { Animated, LayoutChangeEvent, Pressable, StyleSheet, Text, View } from '
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { LiquidGlassView, isLiquidGlassSupported } from '@callstack/liquid-glass';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { colors, glass, motion, radius, shadow, type, type Spring } from '../theme';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { GlassRim } from './ui/GlassRim';
 import { DataTabGlyph, PlanTabGlyph, TrackTabGlyph } from './ui/glyphs';
 
 const BAR_GUTTER = 10;
@@ -23,37 +23,6 @@ const TAB_GLYPHS: Record<string, React.FC<{ size?: number; color?: string }>> = 
 
 /** Space a scrolling tab screen needs under its content to clear the bar. */
 export const TAB_BAR_CLEARANCE = 92;
-
-/**
- * The 1px gradient edge that makes the bar read as a pane of glass rather than
- * a flat panel. It is brightest at the top, where light would strike it.
- */
-const GlassRim: React.FC<{ width: number; height: number }> = ({ width, height }) => {
-  if (width === 0) {
-    return null;
-  }
-  return (
-    <Svg style={StyleSheet.absoluteFill} width={width} height={height} pointerEvents="none">
-      <Defs>
-        <LinearGradient id="tabRim" x1="0" y1="0" x2="0.4" y2="1">
-          {glass.rimStops.map(stop => (
-            <Stop key={stop.offset} offset={stop.offset} stopColor={stop.color} stopOpacity={stop.opacity} />
-          ))}
-        </LinearGradient>
-      </Defs>
-      <Rect
-        x={0.5}
-        y={0.5}
-        width={width - 1}
-        height={height - 1}
-        rx={(height - 1) / 2}
-        fill="none"
-        stroke="url(#tabRim)"
-        strokeWidth={1}
-      />
-    </Svg>
-  );
-};
 
 interface TabItemProps {
   label: string;

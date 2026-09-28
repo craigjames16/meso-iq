@@ -75,17 +75,23 @@ export const DataScreen: React.FC = () => {
     );
 
   return (
-    <Screen refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.text.secondary} />}>
-      <ScreenHeader title="Data" right={chip} />
-      <Segmented
-        options={[
-          { value: 'cycle', label: 'Cycle' },
-          { value: 'progress', label: 'Progress' },
-          { value: 'history', label: 'History' },
-        ]}
-        value={tab}
-        onChange={setTab}
-      />
+    <Screen
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.text.secondary} />}
+      header={
+        <>
+          <ScreenHeader title="Data" right={chip} />
+          <Segmented
+            options={[
+              { value: 'cycle', label: 'Cycle' },
+              { value: 'progress', label: 'Progress' },
+              { value: 'history', label: 'History' },
+            ]}
+            value={tab}
+            onChange={setTab}
+          />
+        </>
+      }
+    >
       {tab === 'cycle' ? (
         <CycleTab
           mesocycleId={selectedMeso?.id ?? null}
