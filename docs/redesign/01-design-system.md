@@ -105,11 +105,11 @@ export const radius = {
 
 ```ts
 export const space = {
-  gutter: 10,          // screen left and right padding
+  gutter: 5,           // screen left and right padding
   screenTop: 12,
   screenBottom: 92,    // clears the floating tab bar
   cardPad: 14,         // 16 for hero cards
-  cardGap: 12,         // 14 between major sections
+  cardGap: 6,          // 7 between major sections
   rowGap: 6,           // between set rows and list rows
   sheetPadX: 14,
   sheetPadBottom: 24,

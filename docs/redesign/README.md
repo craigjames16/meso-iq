@@ -23,7 +23,7 @@ Apply these when a detail isn't covered elsewhere.
 - **Derive, don't store**: estimated one-rep max (e1RM), personal records (PRs), stalls and overload rates are computed on the client from data the API already returns. PRs need no schema change.
 - **Cut data by time horizon**: the Data tab splits into Cycle (this block), Progress (months) and History (all time), not by data source.
 - **Hard sets compare muscles**: set counts compare muscles with each other. Tonnage appears only in History, compared with itself over time.
-- **Sharp and dense**: corners are small, screen gutters are 10px, and the tab bar is liquid glass. Keep screens clean: no legends or group headers where a label on the data does the job.
+- **Sharp and dense**: corners are small, screen gutters are 5px, and the tab bar is liquid glass. Keep screens clean: no legends or group headers where a label on the data does the job.
 
 ## How to work through the spec
 
